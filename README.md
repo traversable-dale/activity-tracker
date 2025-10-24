@@ -132,12 +132,25 @@ If you don't have an icon file:
 
 Navigate to the folder containing `activity_tracker.py` and `setup.py`:
 
+**Option A: Alias Mode (Recommended)**
+
+```bash
+cd /path/to/tracker
+python3.11 setup.py py2app -A
+```
+
+Alias mode creates a lightweight app that links to your source files. This is faster, more reliable, and easier to debug.
+
+**Option B: Full Bundle**
+
 ```bash
 cd /path/to/tracker
 python3.11 setup.py py2app
 ```
 
-This will:
+Full bundle mode packages everything into the app. Use this if you want to share the app or move it away from the source folder.
+
+Both commands will:
 - Create a `build/` folder (temporary files)
 - Create a `dist/` folder containing **Activity Tracker.app**
 
@@ -184,6 +197,13 @@ Keep `setup.py` if you want to rebuild in the future.
 
 If you modify `activity_tracker.py`:
 
+**For alias mode builds:**
+```bash
+# Just rebuild - changes are automatically reflected!
+python3.11 setup.py py2app -A
+```
+
+**For full bundle builds:**
 ```bash
 # Clean old build
 rm -rf build/ dist/
@@ -194,6 +214,8 @@ python3.11 setup.py py2app
 # Move new version
 mv dist/Activity\ Tracker.app /Applications/
 ```
+
+**Note:** With alias mode, the app links to your source files, so code changes take effect immediately without rebuilding!
 
 ### Troubleshooting
 

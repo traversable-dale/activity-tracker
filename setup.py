@@ -1,6 +1,10 @@
 """
 Setup script for building Activity Tracker as a standalone macOS app
 Uses py2app to create a .app bundle
+
+Build modes:
+- Alias mode (development): python3.11 setup.py py2app -A
+- Full bundle (distribution): python3.11 setup.py py2app
 """
 
 from setuptools import setup
@@ -12,6 +16,7 @@ OPTIONS = {
     'packages': ['tkinter', 'pynput', 'PIL', 'csv', 'datetime'],
     'includes': ['AppKit', 'Quartz'],
     'excludes': ['matplotlib', 'numpy', 'scipy'],
+    'alias': True,  # Enable alias mode support
     'plist': {
         'CFBundleName': 'Activity Tracker',
         'CFBundleDisplayName': 'Activity Tracker',
