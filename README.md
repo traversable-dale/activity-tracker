@@ -105,6 +105,119 @@ The app needs permission to monitor keyboard and mouse:
 
 ---
 
+## Building a Standalone App (Optional)
+
+Want to run Activity Tracker as a double-clickable macOS app without opening Terminal? Follow these steps to build a standalone `.app` bundle.
+
+### Requirements
+
+- Everything from the Installation section above
+- **py2app** package for building macOS apps
+
+### Step 1: Install py2app
+
+```bash
+pip3.11 install py2app --break-system-packages
+```
+
+### Step 2: Prepare Your Icon (Optional)
+
+The setup script is configured to use a custom icon at `ref/TDT-logo-white-circle.icns`. 
+
+If you don't have an icon file:
+- Remove or comment out the `'iconfile'` line in `setup.py`
+- Or create your own `.icns` file and update the path
+
+### Step 3: Build the App
+
+Navigate to the folder containing `activity_tracker.py` and `setup.py`:
+
+```bash
+cd /path/to/tracker
+python3.11 setup.py py2app
+```
+
+This will:
+- Create a `build/` folder (temporary files)
+- Create a `dist/` folder containing **Activity Tracker.app**
+
+### Step 4: Move the App
+
+```bash
+# Move the app to your Applications folder
+mv dist/Activity\ Tracker.app /Applications/
+
+# Or open the dist folder to drag it manually
+open dist/
+```
+
+### Step 5: First Launch
+
+1. Open **Finder** and go to **Applications**
+2. Find **Activity Tracker.app**
+3. **Right-click** (or Ctrl+click) and select **Open**
+4. Click **Open** in the security dialog (first launch only)
+
+macOS will ask for accessibility permissions just like running from Terminal. Follow the permission steps from the Installation section above.
+
+### Using the Standalone App
+
+Once built and moved to Applications:
+
+- **Double-click** to launch (no Terminal needed!)
+- The app runs identically to the Python script
+- Data still saves to `activity_data/` in the same folder
+- Click FOLDER button to open the data directory
+
+### Cleaning Up Build Files
+
+After building, you can delete the temporary files:
+
+```bash
+cd /path/to/tracker
+rm -rf build/ dist/
+```
+
+Keep `setup.py` if you want to rebuild in the future.
+
+### Rebuilding After Code Changes
+
+If you modify `activity_tracker.py`:
+
+```bash
+# Clean old build
+rm -rf build/ dist/
+
+# Rebuild
+python3.11 setup.py py2app
+
+# Move new version
+mv dist/Activity\ Tracker.app /Applications/
+```
+
+### Troubleshooting
+
+**"Activity Tracker.app" is damaged and can't be opened**
+- This happens when macOS can't verify the app
+- Right-click → Open instead of double-clicking
+- Or run: `xattr -cr /Applications/Activity\ Tracker.app`
+
+**App doesn't start / crashes immediately**
+- Check that you built with Python 3.11 (not 3.14)
+- Verify all dependencies are installed
+- Try running the Python script directly to see error messages
+
+**Missing icon**
+- Make sure the icon file exists at the path specified in `setup.py`
+- Or remove the `'iconfile'` line to use the default Python icon
+
+**Data folder not found**
+- The app creates `activity_data/` relative to where it's located
+- When in Applications, this will be `/Applications/activity_data/`
+- Consider modifying the script to use a fixed home directory path
+
+---
+
 
 
 
