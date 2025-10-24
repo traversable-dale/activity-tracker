@@ -6,11 +6,13 @@ Track every keystroke and click, see which applications you use most, and analyz
 
 ---
 
+![ref app](ref/ref-GUI.png)
+
 ## What It Does
 
 **Activity Tracker** runs quietly in the background and records:
 
-- **Every keystroke** you type (which key, not what you typed)
+- **Every keystroke** you type
 - **Every mouse click** you make (left, right, middle)
 - **Which application** you're using when each event happens
 - **Precise timestamps** for every action
@@ -21,26 +23,28 @@ All data is saved locally to CSV files that you can analyze later.
 
 ## Key Features
 
-### 🎯 **Simple & Minimal**
+### **Simple & Minimal**
 - Clean black and white interface
 - Compact 320x120 window
-- Three buttons: STOP/START, APP/GLOBAL, FOLDER
-- Real-time event counter
+- Clock + Event counter
+- Three buttons: 
+  - STOP/START | activate / de-activated tracking
+  - APP/GLOBAL | switch between app-specific / global tracking
+  - FOLDER | open folder containing saved data
 
-### 📊 **Smart Data Collection**
+### **Smart Data Collection**
 - Tracks by application OR globally
 - Auto-saves every 60 seconds
 - Session-based storage (one file per session)
 - CSV format for easy analysis (~50% smaller than JSON!)
 
-### 🔒 **Privacy First**
-- No keylogging - only counts keys, not content
+### **Privacy First**
 - No cursor position tracking
 - No screenshots or screen content
 - 100% offline - no internet connection
 - All data stays on your computer
 
-### 🎨 **Fully Customizable**
+### **Customizable**
 - Edit colors at top of script
 - Change fonts and sizes
 - Adjust window dimensions
@@ -100,6 +104,10 @@ The app needs permission to monitor keyboard and mouse:
 8. Restart the app
 
 ---
+
+
+
+
 
 ## How to Use
 
@@ -178,6 +186,10 @@ Creating listeners for the first time...
 
 ---
 
+
+
+
+
 ## Data Format
 
 ### CSV Structure
@@ -212,30 +224,20 @@ CSV format is 50% smaller than JSON!
 
 ---
 
+
 ## Use Cases
 
-### Personal Analytics
+### Analytics + Productivity
 - Track your daily computer usage patterns
-- See which apps you use most
 - Measure typing speed and activity levels
-- Find your most productive hours
-
-### Productivity Monitoring
-- Measure time spent in different applications
-- Track breaks and active periods
-- Analyze work vs. leisure app usage
+- Measure time spent in different applications / see which apps you use most
+- Track breaks and active periods / find your most productive hours
 
 ### Data Analysis Projects
 - Import CSVs into Excel, Python, R
 - Create visualizations and charts
 - Build custom activity dashboards
 - Train machine learning models
-
-### TouchDesigner Integration
-1. Use **Text DAT** to read CSV files
-2. Convert to **Table DAT** for processing
-3. Visualize activity patterns in real-time
-4. Create interactive data installations
 
 ---
 
@@ -280,27 +282,6 @@ FONT_FAMILY = "Arial"
 FONT_SIZE_STATUS = 10
 FONT_SIZE_BUTTON = 9
 ```
-
----
-
-## Platform Notes
-
-### macOS
-- Fully tested and working
-- Requires Accessibility and Input Monitoring permissions
-- Uses NSWorkspace for app detection
-- **Must use Python 3.11** (not 3.14)
-
-### Windows
-- Should work with minor tweaks
-- Uses win32gui and psutil
-- Requires running as administrator
-- Install: `pip install pywin32 psutil`
-
-### Linux
-- Experimental support
-- May need X11 permissions
-- Uses xdotool or similar
 
 ---
 
@@ -351,13 +332,6 @@ Check that:
 3. The terminal shows event lines
 4. You're using Python 3.11
 
-### CSV files won't open
-
-Make sure you're using:
-- Excel, Numbers, or Google Sheets
-- UTF-8 encoding
-- Comma as delimiter
-
 ### "externally-managed-environment" error
 
 Use the `--break-system-packages` flag:
@@ -371,17 +345,13 @@ pip3.11 install pynput pillow --break-system-packages
 
 ### What Gets Recorded
 
-✅ **YES** - Key presses (which key, not content)
+✅ **YES** - Key presses (which key)
 
 ✅ **YES** - Mouse clicks (which button)
 
 ✅ **YES** - Application names
 
 ✅ **YES** - Timestamps
-
-❌ **NO** - Actual text you type
-
-❌ **NO** - Passwords or sensitive content
 
 ❌ **NO** - Screenshots or screen content
 
@@ -466,30 +436,11 @@ It does **NOT** require:
 
 ---
 
-## Version History
-
-### Current Version
-- ✅ Python 3.11 compatibility
-- ✅ CSV data format
-- ✅ Continuous listener approach (no restart crashes)
-- ✅ Black & white UI theme
-- ✅ Improved error handling
-- ✅ Cleaner terminal output
-
-### Changes from Earlier Versions
-- Changed from JSON to CSV (50% smaller files)
-- Fixed Start/Stop button crash
-- Added proper listener lifecycle management
-- Improved macOS permission handling
-- Better compatibility with newer macOS versions
-
----
-
 ## FAQ
 
 **Q: Does this track passwords?**
 
-A: No. It only counts which keys are pressed, not what you type. Your passwords and messages are never recorded.
+A: No. But also YES. This program will monitor your keyboard input, which means that your passwords / login information will be recorded (one keystroke at a time). It is up to the user to decide what happens with the recorded data. If you are tracking activity and need to type a sensistive string, you can always STOP tracking temporarily. The program itself does not recognize words or phrases- only keystrokes.
 
 **Q: Why must I use Python 3.11?**
 
@@ -501,7 +452,7 @@ A: This is a known macOS/pynput compatibility issue. The error appears but keybo
 
 **Q: Can I see my typing speed?**
 
-A: Yes! Count the keystroke events per minute in the CSV files.
+A: Yes! Count the keystroke events per minute in the CSV files. Future versions may include an auto-analysis for typing speed and clicks-per-minute.
 
 **Q: How do I stop tracking?**
 
@@ -511,14 +462,6 @@ A: Click the "STOP" button. Note: the listeners keep running in the background, 
 
 A: Yes. Just delete CSV files from the `activity_data` folder.
 
-**Q: Does this work on Windows?**
-
-A: It should work with minimal changes. Install `pywin32` and `psutil` instead of macOS libraries.
-
-**Q: How do I import data into TouchDesigner?**
-
-A: Use a Text DAT to read the CSV, then convert it to a Table DAT for processing.
-
 **Q: Can I run this 24/7?**
 
 A: Yes! It's designed to run continuously. Data auto-saves every minute.
@@ -527,13 +470,13 @@ A: Yes! It's designed to run continuously. Data auto-saves every minute.
 
 A: No. It uses minimal resources and runs efficiently in the background.
 
-**Q: Why does the START button create a new session?**
-
-A: Each time you start tracking, it creates a new session file. This keeps your data organized by time periods.
-
 ---
 
 ## Credits
+
+Code by Claude
+Prompts + edits by Traversable Dale 
+(October 2025)
 
 Built with:
 - **Python 3.11** - Core language
@@ -549,477 +492,4 @@ Free to use for personal and educational purposes.
 
 ---
 
-## Support
-
-Having issues? Check the Troubleshooting section above.
-
-Want to customize? Edit the settings at the top of the script.
-
-Need help? The code is well-commented and beginner-friendly!
-
----
-
-**Happy Tracking! 📊**# Activity Tracker
-
-A lightweight, cross-platform desktop application that monitors your keyboard and mouse activity in real-time.
-
-Track every keystroke and click, see which applications you use most, and analyze your computer usage patterns over time.
-
----
-
-## What It Does
-
-**Activity Tracker** runs quietly in the background and records:
-
-- **Every keystroke** you type (which key, not what you typed)
-- **Every mouse click** you make (left, right, middle)
-- **Which application** you're using when each event happens
-- **Precise timestamps** for every action
-
-All data is saved locally to CSV files that you can analyze later.
-
----
-
-## Key Features
-
-### 🎯 **Simple & Minimal**
-- Clean black and white interface
-- Compact 320x120 window
-- Three buttons: STOP, APP/GLOBAL, FOLDER
-- Real-time event counter
-
-### 📊 **Smart Data Collection**
-- Tracks by application OR globally
-- Auto-saves every 60 seconds
-- Session-based storage (one file per session)
-- CSV format for easy analysis
-
-### 🔒 **Privacy First**
-- No keylogging - only counts keys, not content
-- No cursor position tracking
-- No screenshots or screen content
-- 100% offline - no internet connection
-- All data stays on your computer
-
-### 🎨 **Fully Customizable**
-- Edit colors at top of script
-- Change fonts and sizes
-- Adjust window dimensions
-- Set auto-save interval
-
----
-
-## Installation
-
-### Requirements
-
-- **macOS** (Windows/Linux compatible with minor tweaks)
-- **Python 3.9+**
-- **Homebrew** (for macOS dependencies)
-
-### Step 1: Install System Dependencies
-
-```bash
-brew install python-tk
-```
-
-### Step 2: Install Python Packages
-
-```bash
-pip3 install pynput pillow --break-system-packages
-```
-
-### Step 3: Download the Script
-
-Save `activity_tracker.py` to a folder on your computer.
-
-### Step 4: Grant Permissions (macOS Only)
-
-The app needs permission to monitor keyboard and mouse:
-
-1. Run the app once: `python3 activity_tracker.py`
-2. Go to **System Preferences** → **Security & Privacy** → **Privacy**
-3. Add Python to **Accessibility** and **Input Monitoring**
-4. Restart the app
-
----
-
-## How to Use
-
-### Starting the Tracker
-
-```bash
-cd /path/to/tracker
-python3 activity_tracker.py
-```
-
-The app will:
-- Open a small window
-- Start tracking immediately
-- Print each event to the terminal
-- Auto-save every 60 seconds
-
-### The Interface
-
-```
-┌─────────────────────────┐
-│      TRACKING           │
-│                         │
-│  [STOP] [APP] [FOLDER]  │
-│                         │
-│   2m 30s | 145 events   │
-└─────────────────────────┘
-```
-
-**STOP/START** - Toggle tracking on/off
-
-**APP/GLOBAL** - Switch modes:
-- **APP mode**: Track which application each event belongs to
-- **GLOBAL mode**: Track all events without app names
-
-**FOLDER** - Opens the `activity_data` folder in Finder
-
-### Reading the Data
-
-All sessions are saved as CSV files in the `activity_data/` folder:
-
-```
-activity_data/
-  ├── session_20251022_143500.csv
-  ├── session_20251022_150200.csv
-  └── session_20251022_152700.csv
-```
-
-Each CSV file contains:
-
-```csv
-timestamp,app,event_type,key
-2025-10-22T15:35:00.123456,Chrome,keystroke,h
-2025-10-22T15:35:00.234567,Chrome,keystroke,e
-2025-10-22T15:35:00.345678,Chrome,click,left
-```
-
-### Terminal Output
-
-Clean, one-line-per-event format:
-
-```
-[Chrome] keystroke: h
-[Chrome] keystroke: e
-[Chrome] keystroke: l
-[Chrome] click: left
->>> Auto-saved: 245 events | File: activity_data/session_20251022_152500.csv <<<
-```
-
----
-
-## Data Format
-
-### CSV Structure
-
-| Column | Description | Example |
-|--------|-------------|---------|
-| `timestamp` | ISO 8601 timestamp | `2025-10-22T15:35:00.123456` |
-| `app` | Application name | `Chrome`, `Finder`, `Global` |
-| `event_type` | Type of event | `keystroke` or `click` |
-| `key` | Specific key or button | `a`, `space`, `left`, `right` |
-
-### File Naming
-
-Files are named with session start time:
-
-```
-session_YYYYMMDD_HHMMSS.csv
-        │       │
-        │       └─ Hour, minute, second
-        └───────── Year, month, day
-```
-
-### File Size
-
-Approximate file sizes:
-
-- **1 hour of light use**: ~50 KB
-- **1 hour of heavy typing**: ~200 KB
-- **8 hour work day**: ~500 KB - 1 MB
-
-CSV format is 50% smaller than JSON!
-
----
-
-## Use Cases
-
-### Personal Analytics
-- Track your daily computer usage patterns
-- See which apps you use most
-- Measure typing speed and activity levels
-- Find your most productive hours
-
-### Productivity Monitoring
-- Measure time spent in different applications
-- Track breaks and active periods
-- Analyze work vs. leisure app usage
-
-### Data Analysis Projects
-- Import CSVs into Excel, Python, R
-- Create visualizations and charts
-- Build custom activity dashboards
-- Train machine learning models
-
-### TouchDesigner Integration
-1. Use **Text DAT** to read CSV files
-2. Convert to **Table DAT** for processing
-3. Visualize activity patterns in real-time
-4. Create interactive data installations
-
----
-
-## Customization
-
-### Changing Colors
-
-Edit the settings at the top of `activity_tracker.py`:
-
-```python
-# Background
-BG_COLOR = "#FFFFFF"  # White
-
-# Button colors
-BUTTON_STOP_BG = "#FFFFFF"  # White buttons
-BUTTON_TEXT_COLOR = "#000000"  # Black text
-
-# Status colors
-STATUS_TRACKING_COLOR = "#000000"  # Black
-```
-
-### Changing Window Size
-
-```python
-WINDOW_SIZE = "320x120"  # Width x Height
-```
-
-### Changing Auto-Save Interval
-
-```python
-self.tracker = ActivityTracker(autosave_interval=60)  # seconds
-```
-
-Change `60` to any number of seconds.
-
-### Changing Fonts
-
-```python
-FONT_FAMILY = "Arial"
-FONT_SIZE_STATUS = 10
-FONT_SIZE_BUTTON = 9
-```
-
----
-
-## Platform Notes
-
-### macOS
-- Fully tested and working
-- Requires Accessibility permissions
-- Uses NSWorkspace for app detection
-
-### Windows
-- Should work with minor tweaks
-- Uses win32gui and psutil
-- Requires running as administrator
-
-### Linux
-- Experimental support
-- May need X11 permissions
-- Uses xdotool or similar
-
----
-
-## Troubleshooting
-
-### "Module not found" error
-
-Install dependencies:
-```bash
-pip3 install pynput pillow --break-system-packages
-```
-
-### App crashes on startup
-
-Install python-tk:
-```bash
-brew install python-tk
-```
-
-### "Not trusted" error (macOS)
-
-Grant permissions in **System Preferences** → **Security & Privacy**:
-- Add Python to **Accessibility**
-- Add Python to **Input Monitoring**
-
-### No events being recorded
-
-Check that:
-1. Status shows "TRACKING" (not "STOPPED")
-2. You've granted system permissions
-3. The terminal shows event lines
-
-### CSV files won't open
-
-Make sure you're using:
-- Excel, Numbers, or Google Sheets
-- UTF-8 encoding
-- Comma as delimiter
-
----
-
-## Privacy & Security
-
-### What Gets Recorded
-
-✅ **YES** - Key presses (which key, not content)
-
-✅ **YES** - Mouse clicks (which button)
-
-✅ **YES** - Application names
-
-✅ **YES** - Timestamps
-
-❌ **NO** - Actual text you type
-
-❌ **NO** - Passwords or sensitive content
-
-❌ **NO** - Screenshots or screen content
-
-❌ **NO** - Cursor positions
-
-❌ **NO** - Window titles or URLs
-
-❌ **NO** - File paths or documents
-
-### Data Storage
-
-- All data stored **locally** on your computer
-- No cloud sync or remote servers
-- No internet connection required
-- You control your own data
-- Delete files anytime to remove data
-
-### Permissions
-
-The app requires system permissions to:
-- Monitor keyboard input
-- Monitor mouse input
-- Get active application name
-
-It does **NOT** require:
-- Screen recording
-- File system access
-- Network access
-- Camera or microphone
-
----
-
-## Technical Details
-
-### Architecture
-
-```
-┌─────────────────────────────────────┐
-│  GUI (Tkinter)                      │
-│  - Display window                   │
-│  - Update stats                     │
-│  - Control buttons                  │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│  ActivityTracker                    │
-│  - Record events                    │
-│  - Manage sessions                  │
-│  - Save to CSV                      │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│  Listeners (pynput)                 │
-│  - Keyboard monitoring              │
-│  - Mouse monitoring                 │
-└─────────────────────────────────────┘
-```
-
-### Threading Model
-
-- **Main Thread**: GUI and display updates
-- **Listener Thread**: Keyboard/mouse monitoring
-- Events recorded instantly, saved periodically
-
-### Performance
-
-- **Memory**: ~20-30 MB RAM usage
-- **CPU**: <1% when idle, 2-5% during heavy typing
-- **Storage**: ~1 MB per 8-hour workday
-
----
-
-## FAQ
-
-**Q: Does this track passwords?**
-
-A: No. It only counts which keys are pressed, not what you type. Your passwords and messages are never recorded.
-
-**Q: Can I see my typing speed?**
-
-A: Yes! Count the keystroke events per minute in the CSV files.
-
-**Q: How do I stop tracking?**
-
-A: Click the "STOP" button or close the window.
-
-**Q: Can I delete old data?**
-
-A: Yes. Just delete CSV files from the `activity_data` folder.
-
-**Q: Does this work on Windows?**
-
-A: It should work with minimal changes. Install `pywin32` and `psutil` instead of macOS libraries.
-
-**Q: How do I import data into TouchDesigner?**
-
-A: Use a Text DAT to read the CSV, then convert it to a Table DAT for processing.
-
-**Q: Can I run this 24/7?**
-
-A: Yes! It's designed to run continuously. Data auto-saves every minute.
-
-**Q: Will this slow down my computer?**
-
-A: No. It uses minimal resources and runs in the background efficiently.
-
----
-
-## Credits
-
-Built with:
-- **Python 3** - Core language
-- **Tkinter** - GUI framework
-- **pynput** - Input monitoring
-- **Pillow** - Image support (future features)
-
----
-
-## License
-
-Free to use for personal and educational purposes.
-
----
-
-## Support
-
-Having issues? Check the Troubleshooting section above.
-
-Want to customize? Edit the settings at the top of the script.
-
-Need help? The code is well-commented and beginner-friendly!
-
----
-
-**Happy Tracking! 📊**
+**Happy Tracking!**
