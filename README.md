@@ -120,15 +120,7 @@ Want to run Activity Tracker as a double-clickable macOS app without opening Ter
 pip3.11 install py2app --break-system-packages
 ```
 
-### Step 2: Prepare Your Icon (Optional)
-
-The setup script is configured to use a custom icon at `ref/TDT-logo-white-circle.icns`. 
-
-If you don't have an icon file:
-- Remove or comment out the `'iconfile'` line in `setup.py`
-- Or create your own `.icns` file and update the path
-
-### Step 3: Build the App
+### Step 2: Build the App
 
 Navigate to the folder containing `activity_tracker.py` and `setup.py`:
 
@@ -154,7 +146,7 @@ Both commands will:
 - Create a `build/` folder (temporary files)
 - Create a `dist/` folder containing **Activity Tracker.app**
 
-### Step 4: Move the App
+### Step 3: Move the App
 
 ```bash
 # Move the app to your Applications folder
@@ -164,7 +156,7 @@ mv dist/Activity\ Tracker.app /Applications/
 open dist/
 ```
 
-### Step 5: First Launch
+### Step 4: First Launch
 
 1. Open **Finder** and go to **Applications**
 2. Find **Activity Tracker.app**
@@ -179,7 +171,7 @@ Once built and moved to Applications:
 
 - **Double-click** to launch (no Terminal needed!)
 - The app runs identically to the Python script
-- Data still saves to `activity_data/` in the same folder
+- Data still saves to `activity_data/` which is now located within the package contents folder
 - Click FOLDER button to open the data directory
 
 ### Cleaning Up Build Files
