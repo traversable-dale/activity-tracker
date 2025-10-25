@@ -6,6 +6,26 @@ Track every keystroke and click, see which applications you use most, and analyz
 
 ---
 
+## Table of Contents
+
+- [What It Does](#what-it-does)
+- [Key Features](#key-features)
+- [Installation](#installation)
+- [Building a Standalone App (Optional)](#building-a-standalone-app-optional)
+- [How to Use](#how-to-use)
+- [Data Format](#data-format)
+- [Use Cases](#use-cases)
+- [Customization](#customization)
+- [Troubleshooting](#troubleshooting)
+- [Privacy & Security](#privacy--security)
+- [Technical Details](#technical-details)
+- [How It Works: Code Breakdown](#how-it-works-code-breakdown)
+- [FAQ](#faq)
+- [Credits](#credits)
+- [License](#license)
+
+---
+
 ![ref app](ref/ref-GUI.png)
 
 ## What It Does
@@ -114,11 +134,13 @@ Want to run Activity Tracker as a double-clickable macOS app without opening Ter
 - Everything from the Installation section above
 - **py2app** package for building macOS apps
 
-### Step 1: Install py2app
+### Step 1: Install py2app and All Dependencies
 
 ```bash
-pip3.11 install py2app --break-system-packages
+pip3.11 install py2app macholib modulegraph altgraph --break-system-packages
 ```
+
+**Note:** py2app requires several dependencies (`macholib`, `modulegraph`, `altgraph`). Installing them all together prevents cascading dependency errors during the build.
 
 ### Step 2: Build the App
 
@@ -171,7 +193,7 @@ Once built and moved to Applications:
 
 - **Double-click** to launch (no Terminal needed!)
 - The app runs identically to the Python script
-- Data still saves to `activity_data/` which is now located within the package contents folder
+- Data still saves to `activity_data/` in the same folder
 - Click FOLDER button to open the data directory
 
 ### Cleaning Up Build Files
@@ -211,6 +233,20 @@ mv dist/Activity\ Tracker.app /Applications/
 
 ### Troubleshooting
 
+**Missing py2app dependencies**
+```
+pkg_resources.DistributionNotFound: The 'macholib>=1.16.2' distribution was not found
+pkg_resources.DistributionNotFound: The 'modulegraph>=0.19.6' distribution was not found
+```
+- Install all dependencies at once: `pip3.11 install py2app macholib modulegraph altgraph --break-system-packages`
+- Then rebuild: `python3.11 setup.py py2app -A`
+- **Tip:** If you see multiple "distribution not found" errors, just install all the missing packages together
+
+**setuptools deprecation warnings**
+- You may see warnings about `setuptools.installer` and `pkg_resources` being deprecated
+- These are harmless warnings from py2app and won't affect the build
+- The app will still build and run correctly
+
 **"Activity Tracker.app" is damaged and can't be opened**
 - This happens when macOS can't verify the app
 - Right-click → Open instead of double-clicking
@@ -220,10 +256,6 @@ mv dist/Activity\ Tracker.app /Applications/
 - Check that you built with Python 3.11 (not 3.14)
 - Verify all dependencies are installed
 - Try running the Python script directly to see error messages
-
-**Missing icon**
-- Make sure the icon file exists at the path specified in `setup.py`
-- Or remove the `'iconfile'` line to use the default Python icon
 
 **Data folder not found**
 - The app creates `activity_data/` relative to where it's located
@@ -563,6 +595,199 @@ It does **NOT** require:
 
 ---
 
+## How It Works: Code Breakdown
+
+Want to understand what's happening under the hood? Here's a plain-language explanation of the code and libraries.
+
+### The py2app Dependencies
+
+When building the standalone app, py2app needs several helper libraries:
+
+**altgraph**
+- Creates and analyzes graph data structures (nodes and connections)
+- Think of it like mapping relationships: "A connects to B, B connects to C"
+- Used by the other tools to track relationships between code modules
+
+**modulegraph**
+- Analyzes your Python code to find ALL the modules/packages your app uses
+- Follows the import chain: "You import X, X imports Y, Y imports Z..."
+- Creates a complete dependency tree so py2app knows what to bundle
+- Uses altgraph to store this tree structure
+
+**macholib**
+- Reads and modifies Mach-O files (the executable format on macOS)
+- Mach-O = "Mach Object" (like .exe on Windows, but for macOS/iOS)
+- Helps py2app understand compiled libraries and frameworks
+- Fixes paths to dynamic libraries so they work inside the app bundle
+
+**How they work together:**
+1. `modulegraph` (using `altgraph`) finds all your Python dependencies
+2. `macholib` handles the compiled/binary dependencies (C libraries, frameworks)
+3. `py2app` uses both to package everything into a .app bundle
+
+### Code Structure
+
+The `activity_tracker.py` file has three main sections:
+
+#### 1. Imports & Setup (Lines 1-76)
+
+```python
+import tkinter as tk  # GUI framework
+from pynput import keyboard, mouse  # Listen to keyboard/mouse
+from AppKit import NSWorkspace  # Get active app name (macOS)
+```
+
+- Loads all the tools needed
+- Sets up customization variables (colors, fonts, window size)
+- Imports macOS-specific frameworks for tracking which app is active
+
+#### 2. ActivityTracker Class (Lines 79-252)
+
+**The Core Tracking Engine**
+
+`__init__()` - Initialization
+- Creates the `activity_data/` folder
+- Sets up variables to track sessions and events
+- Prepares everything but doesn't start listeners yet
+
+`get_active_application()` - Which app is the user in?
+- Asks macOS "which app window is in front right now?"
+- Uses NSWorkspace (macOS framework) to check the active window
+- Returns app name like "Chrome" or "Finder"
+
+`record_event()` - Save a keystroke or click
+- Creates a timestamp (ISO 8601 format)
+- Gets the active app name
+- Adds event to a list
+- Prints to terminal for immediate feedback
+- Auto-saves to CSV every 60 seconds
+
+`on_key_press()` & `on_click()` - Input callbacks
+- pynput calls these functions automatically when input happens
+- They extract the key/button info and pass it to `record_event()`
+
+`start_tracking()` - Begin a new session
+- Creates a unique session ID (timestamp: `20251025_143000`)
+- Creates listeners if they don't exist yet (keyboard & mouse)
+- Sets `self.tracking = True` so events get recorded
+
+`stop_tracking()` - Pause recording
+- Saves current session to CSV
+- Sets `self.tracking = False`
+- Note: listeners keep running in background, just don't record
+
+`save_session()` - Write events to CSV file
+- Opens/creates a CSV file in `activity_data/`
+- Writes all events with columns: timestamp, app, event_type, key
+- Clears the event list for the next batch
+
+#### 3. GUI Class (Lines 288-496)
+
+**The Visual Interface**
+
+**Initialization:**
+- Creates a small window (320x120 pixels)
+- Loads background image if available, otherwise uses solid color
+- Creates the ActivityTracker instance
+- Starts tracking automatically on launch
+
+**UI Components:**
+```
+┌─────────────────────┐
+│    TRACKING         │  ← Status label
+│                     │
+│ [STOP] [APP] [FOLDER] │  ← Control buttons
+│                     │
+│  2m 30s | 145 events │  ← Stats label
+└─────────────────────┘
+```
+
+**Button Functions:**
+
+`toggle_tracking()` - STOP/START button
+- Stops or starts recording (not the listeners!)
+- Updates button text and status label color
+
+`toggle_mode()` - APP/GLOBAL button
+- Switches between tracking by app vs. tracking everything as "Global"
+
+`open_data_folder()` - FOLDER button
+- Opens the `activity_data/` folder in Finder
+
+`update_status()` - Status display loop
+- Updates every second
+- Shows elapsed time and event count while tracking
+- Shows total events when stopped
+- Uses `self.root.after(1000, ...)` to create a repeating timer
+
+### The Flow: What Happens When
+
+**When you launch the app:**
+1. Creates GUI window
+2. Creates ActivityTracker instance
+3. Starts tracking thread
+4. Starts keyboard listener thread
+5. Starts mouse listener thread
+6. Begins status update loop
+
+**When you type or click:**
+1. pynput listener catches the event in its background thread
+2. Calls `on_key_press()` or `on_click()`
+3. Calls `record_event()` with the key/button info
+4. Adds event to the session list
+5. Prints to terminal for feedback
+6. Every 60 seconds, auto-saves entire list to CSV
+
+**When you click STOP:**
+1. Sets `self.tracking = False`
+2. Saves current session to CSV file
+3. Listeners keep running (can't stop/restart them reliably)
+4. Events are captured but ignored until you click START
+
+**When you click START:**
+1. Creates new session ID (new timestamp)
+2. Sets `self.tracking = True`
+3. Events start recording again to a new CSV file
+
+**When you close the app:**
+1. Calls `on_closing()`
+2. Saves final session
+3. Destroys GUI window
+4. Listeners stop automatically (they're daemon threads)
+
+### Key Design Decisions
+
+**Why listeners run continuously:**
+- pynput listeners can't be reliably stopped and restarted
+- Solution: keep them running, use a boolean flag (`self.tracking`) to control recording
+- STOP button = pause recording, START button = resume recording
+
+**Why threading:**
+- GUI needs the main thread to stay responsive
+- Listeners need background threads to monitor input
+- Status updates need a timer loop
+- Without threading, the GUI would freeze waiting for input
+
+**Why CSV instead of JSON:**
+- Much smaller file size (~50% savings for large datasets)
+- Easier to import into Excel, Pandas, R, or other analysis tools
+- Simple tabular structure: one event per row
+- Fast to write (append mode)
+
+**Why auto-save every 60 seconds:**
+- Prevents data loss if the app crashes
+- Low overhead (CSV writes are fast)
+- Customizable via `autosave_interval` parameter
+- Keeps memory usage low by clearing the event list
+
+**Why session-based files:**
+- Each START creates a new file with unique timestamp
+- Easy to analyze individual work sessions
+- No risk of corrupting all your data if one save fails
+- Natural separation of time periods
+
+---
+
 ## FAQ
 
 **Q: Does this track passwords?**
@@ -601,7 +826,7 @@ A: No. It uses minimal resources and runs efficiently in the background.
 
 ## Credits
 
-Code by Claude
+Code by Claude 
 Prompts + edits by Traversable Dale 
 (October 2025)
 
