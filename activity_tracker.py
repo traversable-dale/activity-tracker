@@ -49,29 +49,28 @@ elif platform.system() == 'Windows':
 # ============ CUSTOMIZATION SETTINGS ============
 # Edit these to customize the appearance
 
-WINDOW_SIZE = "320x120"  # Slightly larger for stability
+WINDOW_SIZE = "320x120"
 
 # Background: Use color OR image (image takes priority if found)
-BG_COLOR = "#FFFFFF"  # White background
+BG_COLOR = "#FFFFFF"  # Background color (used when no image)
 BG_IMAGE_PATH = "assets/bg/background.png"  # Optional background image
 
 # Button colors
-BUTTON_STOP_BG = "#FFFFFF"  # White
-BUTTON_START_BG = "#FFFFFF"  # White
-BUTTON_MODE_BG = "#FFFFFF"  # White
-BUTTON_FOLDER_BG = "#FFFFFF"  # White
-BUTTON_TEXT_COLOR = "#000000"  # Black text
-BUTTON_BORDER_COLOR = "#000000"  # Black border
+BUTTON_STOP_BG = "#9C2D2D"  
+BUTTON_START_BG = "#2D9C64"  
+BUTTON_MODE_BG = "#9C642D"  
+BUTTON_FOLDER_BG = "#2D649C"  
+BUTTON_TEXT_COLOR = "#123456"  # Button text color
+
+# Text colors
+STATUS_TRACKING_COLOR = "#FFFFFF"  # "TRACKING" text color
+STATUS_STOPPED_COLOR = "#FFFFFF"   # "STOPPED" text color  
+STATS_TEXT_COLOR = "#FFFFFF"       # Stats text color (time & events)
 
 # Font settings
 FONT_FAMILY = "Arial"
-FONT_SIZE_TITLE = 14
 FONT_SIZE_STATUS = 10
 FONT_SIZE_BUTTON = 9
-
-# Status colors
-STATUS_TRACKING_COLOR = "#000000"  # Black
-STATUS_STOPPED_COLOR = "#000000"  # Black
 
 # ================================================
 
@@ -306,23 +305,37 @@ class ActivityTrackerGUI:
                 # Resize to window size
                 width, height = map(int, WINDOW_SIZE.split('x'))
                 img = img.resize((width, height), Image.Resampling.LANCZOS)
-                self.bg_image = ImageTk.PhotoImage(img)
-                print(f"Loaded background image: {BG_IMAGE_PATH}")
+                
+                # Create semi-transparent black overlay (40% opacity)
+                overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))  # Black with 40% opacity
+                
+                # Convert base image to RGBA and blend
+                if img.mode != 'RGBA':
+                    img = img.convert('RGBA')
+                blended = Image.alpha_composite(img, overlay)
+                
+                self.bg_image = ImageTk.PhotoImage(blended)
+                print(f"Loaded background image with overlay: {BG_IMAGE_PATH}")
             except Exception as e:
                 print(f"Could not load background image: {e}")
                 self.bg_image = None
         
         # Set background
         if self.bg_image:
-            # Create canvas for image background
-            self.canvas = tk.Canvas(self.root, width=300, height=100, highlightthickness=0)
+            # Create canvas for image background (now includes overlay)
+            width, height = map(int, WINDOW_SIZE.split('x'))
+            self.canvas = tk.Canvas(self.root, width=width, height=height, highlightthickness=0)
             self.canvas.pack(fill=tk.BOTH, expand=True)
             self.canvas.create_image(0, 0, image=self.bg_image, anchor=tk.NW)
-            self.bg_widget = self.canvas
+            
+            # We'll place widgets directly on canvas
+            self.has_bg_image = True
         else:
             # Use solid color background
             self.root.configure(bg=BG_COLOR)
-            self.bg_widget = self.root
+            self.has_bg_image = False
+            self.main_frame = tk.Frame(self.root, bg=BG_COLOR)
+            self.main_frame.pack(expand=True, fill=tk.BOTH)
         
         # Create UI
         self.create_ui()
@@ -337,59 +350,89 @@ class ActivityTrackerGUI:
     def create_ui(self):
         """Create the compact user interface"""
         try:
-            # Use simple pack layout - very stable
-            main_frame = tk.Frame(self.root, bg=BG_COLOR)
-            main_frame.pack(expand=True, fill=tk.BOTH)
-            
-            # Status label
-            self.status_label = tk.Label(main_frame, text="TRACKING", 
-                                         font=(FONT_FAMILY, FONT_SIZE_STATUS, 'bold'), 
-                                         bg=BG_COLOR, fg=STATUS_TRACKING_COLOR)
-            self.status_label.pack(pady=5)
-            
-            # Button frame
-            button_frame = tk.Frame(main_frame, bg=BG_COLOR)
-            button_frame.pack(pady=5)
-            
-            # Buttons with black borders
-            self.toggle_btn = tk.Button(button_frame, text="STOP",
-                                        command=self.toggle_tracking,
-                                        font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
-                                        bg=BUTTON_STOP_BG, fg=BUTTON_TEXT_COLOR,
-                                        width=8, height=1, 
-                                        relief=tk.SOLID, borderwidth=2,
-                                        highlightbackground=BUTTON_BORDER_COLOR,
-                                        highlightcolor=BUTTON_BORDER_COLOR,
-                                        highlightthickness=2)
-            self.toggle_btn.pack(side=tk.LEFT, padx=2)
-            
-            self.mode_btn = tk.Button(button_frame, text="APP",
-                                     command=self.toggle_mode,
-                                     font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
-                                     bg=BUTTON_MODE_BG, fg=BUTTON_TEXT_COLOR,
-                                     width=8, height=1,
-                                     relief=tk.SOLID, borderwidth=2,
-                                     highlightbackground=BUTTON_BORDER_COLOR,
-                                     highlightcolor=BUTTON_BORDER_COLOR,
-                                     highlightthickness=2)
-            self.mode_btn.pack(side=tk.LEFT, padx=2)
-            
-            self.folder_btn = tk.Button(button_frame, text="FOLDER",
-                                       command=self.open_data_folder,
-                                       font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
-                                       bg=BUTTON_FOLDER_BG, fg=BUTTON_TEXT_COLOR,
-                                       width=8, height=1,
-                                       relief=tk.SOLID, borderwidth=2,
-                                       highlightbackground=BUTTON_BORDER_COLOR,
-                                       highlightcolor=BUTTON_BORDER_COLOR,
-                                       highlightthickness=2)
-            self.folder_btn.pack(side=tk.LEFT, padx=2)
-            
-            # Stats label
-            self.stats_label = tk.Label(main_frame, text="0m 0s | 0 events", 
-                                        font=(FONT_FAMILY, 7), 
-                                        bg=BG_COLOR, fg='#000000')
-            self.stats_label.pack(pady=5)
+            if self.has_bg_image:
+                # Place elements directly on canvas with solid backgrounds
+                width, height = map(int, WINDOW_SIZE.split('x'))
+                
+                # Status label at top
+                self.status_label = tk.Label(self.root, text="TRACKING", 
+                                             font=(FONT_FAMILY, FONT_SIZE_STATUS, 'bold'), 
+                                             fg=STATUS_TRACKING_COLOR, bg='#000000')
+                self.canvas.create_window(width//2, 20, window=self.status_label)
+                
+                # Create buttons with customizable colors
+                button_y = height//2
+                button_spacing = 90
+                start_x = width//2 - button_spacing
+                
+                self.toggle_btn = tk.Button(self.root, text="STOP",
+                                            command=self.toggle_tracking,
+                                            font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
+                                            bg=BUTTON_STOP_BG, fg=BUTTON_TEXT_COLOR,
+                                            width=8, height=1, 
+                                            relief=tk.FLAT, bd=0)
+                self.canvas.create_window(start_x, button_y, window=self.toggle_btn)
+                
+                self.mode_btn = tk.Button(self.root, text="APP",
+                                         command=self.toggle_mode,
+                                         font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
+                                         bg=BUTTON_MODE_BG, fg=BUTTON_TEXT_COLOR,
+                                         width=8, height=1,
+                                         relief=tk.FLAT, bd=0)
+                self.canvas.create_window(start_x + button_spacing, button_y, window=self.mode_btn)
+                
+                self.folder_btn = tk.Button(self.root, text="FOLDER",
+                                           command=self.open_data_folder,
+                                           font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
+                                           bg=BUTTON_FOLDER_BG, fg=BUTTON_TEXT_COLOR,
+                                           width=8, height=1,
+                                           relief=tk.FLAT, bd=0)
+                self.canvas.create_window(start_x + button_spacing*2, button_y, window=self.folder_btn)
+                
+                # Stats label at bottom  
+                self.stats_label = tk.Label(self.root, text="0m 0s | 0 events", 
+                                            font=(FONT_FAMILY, 7), 
+                                            fg=STATS_TEXT_COLOR, bg='#000000')
+                self.canvas.create_window(width//2, height - 15, window=self.stats_label)
+                
+            else:
+                # Use frame-based layout (no background image)
+                self.status_label = tk.Label(self.main_frame, text="TRACKING", 
+                                             font=(FONT_FAMILY, FONT_SIZE_STATUS, 'bold'), 
+                                             bg=BG_COLOR, fg='#000000')
+                self.status_label.pack(pady=5)
+                
+                button_frame = tk.Frame(self.main_frame, bg=BG_COLOR)
+                button_frame.pack(pady=5)
+                
+                self.toggle_btn = tk.Button(button_frame, text="STOP",
+                                            command=self.toggle_tracking,
+                                            font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
+                                            bg=BUTTON_STOP_BG, fg='#FFFFFF',
+                                            width=8, height=1, 
+                                            relief=tk.FLAT, bd=0)
+                self.toggle_btn.pack(side=tk.LEFT, padx=2)
+                
+                self.mode_btn = tk.Button(button_frame, text="APP",
+                                         command=self.toggle_mode,
+                                         font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
+                                         bg=BUTTON_MODE_BG, fg='#FFFFFF',
+                                         width=8, height=1,
+                                         relief=tk.FLAT, bd=0)
+                self.mode_btn.pack(side=tk.LEFT, padx=2)
+                
+                self.folder_btn = tk.Button(button_frame, text="FOLDER",
+                                           command=self.open_data_folder,
+                                           font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
+                                           bg=BUTTON_FOLDER_BG, fg='#FFFFFF',
+                                           width=8, height=1,
+                                           relief=tk.FLAT, bd=0)
+                self.folder_btn.pack(side=tk.LEFT, padx=2)
+                
+                self.stats_label = tk.Label(self.main_frame, text="0m 0s | 0 events", 
+                                            font=(FONT_FAMILY, 7), 
+                                            bg=BG_COLOR, fg='#000000')
+                self.stats_label.pack(pady=5)
             
         except Exception as e:
             print(f"Error creating UI: {e}")
@@ -412,11 +455,10 @@ class ActivityTrackerGUI:
             if self.tracker.tracking:
                 # Stop current tracking
                 self.tracker.stop_tracking()
-                self.toggle_btn.config(text="START", bg=BUTTON_START_BG)
+                self.toggle_btn.config(text="START", bg=BUTTON_START_BG, fg=BUTTON_TEXT_COLOR)
                 self.status_label.config(text="STOPPED", fg=STATUS_STOPPED_COLOR)
             else:
                 # Start new tracking session
-                # Give a small delay to ensure everything is cleaned up
                 import time
                 time.sleep(0.2)
                 
@@ -425,7 +467,7 @@ class ActivityTrackerGUI:
                     target=self.tracker.start_tracking, daemon=True)
                 self.tracking_thread.start()
                 
-                self.toggle_btn.config(text="STOP", bg=BUTTON_STOP_BG)
+                self.toggle_btn.config(text="STOP", bg=BUTTON_STOP_BG, fg=BUTTON_TEXT_COLOR)
                 self.status_label.config(text="TRACKING", fg=STATUS_TRACKING_COLOR)
         except Exception as e:
             print(f"Error toggling tracking: {e}")
