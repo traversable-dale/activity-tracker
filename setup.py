@@ -10,7 +10,7 @@ Build modes:
 from setuptools import setup
 
 APP = ['activity_tracker.py']
-DATA_FILES = []
+DATA_FILES = [('assets/bg', ['assets/bg/background.png'])]
 OPTIONS = {
     'argv_emulation': False,
     'packages': ['tkinter', 'pynput', 'PIL', 'csv', 'datetime'],
