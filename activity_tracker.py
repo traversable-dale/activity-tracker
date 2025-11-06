@@ -81,7 +81,11 @@ class ActivityTracker:
     def __init__(self, autosave_interval=60):  # Changed to 60 seconds (1 minute)
         self.tracking = False
         self.global_mode = False  # False = app-specific, True = global
-        self.data_folder = 'activity_data'
+        
+        # Use script directory, not current working directory
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        self.data_folder = os.path.join(script_dir, 'activity_data')
+        
         self.autosave_interval = autosave_interval  # seconds between auto-saves
         self.last_save_time = datetime.now()
         
@@ -209,17 +213,17 @@ class ActivityTracker:
                 # Give it a moment
                 import time
                 time.sleep(0.3)
-                print(f"✓ Keyboard listener started")
+                print(f"âœ“ Keyboard listener started")
             except Exception as e:
-                print(f"✗ Keyboard listener error (may still work): {e}")
+                print(f"âœ— Keyboard listener error (may still work): {e}")
             
             # Start mouse monitoring
             try:
                 self.mouse_listener = mouse.Listener(on_click=self.on_click)
                 self.mouse_listener.start()
-                print(f"✓ Mouse listener started")
+                print(f"âœ“ Mouse listener started")
             except Exception as e:
-                print(f"✗ Error starting mouse listener: {e}")
+                print(f"âœ— Error starting mouse listener: {e}")
             
             self.listeners_started = True
         else:
@@ -285,11 +289,471 @@ class ActivityTracker:
             return 0
 
 
+class ActivitySummary:
+    """Analyze and summarize activity tracking data"""
+    
+    def __init__(self, data_folder='activity_data'):
+        self.data_folder = data_folder
+        self.break_threshold = 300  # 5 minutes in seconds
+    
+    def load_all_events(self):
+        """Load all events from CSV files"""
+        all_events = []
+        session_files = glob.glob(os.path.join(self.data_folder, 'session_*.csv'))
+        
+        for session_file in session_files:
+            try:
+                with open(session_file, 'r', newline='', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        all_events.append(row)
+            except Exception as e:
+                print(f"Warning: Could not load {session_file}: {e}")
+        
+        return all_events
+    
+    def parse_timestamp(self, timestamp_str):
+        """Parse ISO timestamp string to datetime"""
+        try:
+            return datetime.fromisoformat(timestamp_str)
+        except:
+            return None
+    
+    def detect_periods(self, events):
+        """Detect working periods and breaks in event list"""
+        if not events:
+            return []
+        
+        periods = []
+        current_period = {
+            'start': None,
+            'end': None,
+            'events': [],
+            'type': 'work'  # 'work' or 'break'
+        }
+        
+        for i, event in enumerate(events):
+            timestamp = self.parse_timestamp(event['timestamp'])
+            if not timestamp:
+                continue
+            
+            if current_period['start'] is None:
+                # Start first period
+                current_period['start'] = timestamp
+                current_period['events'].append(event)
+            else:
+                # Check time gap from last event
+                last_timestamp = self.parse_timestamp(current_period['events'][-1]['timestamp'])
+                time_gap = (timestamp - last_timestamp).total_seconds()
+                
+                if time_gap > self.break_threshold:
+                    # End current period
+                    current_period['end'] = last_timestamp
+                    periods.append(current_period)
+                    
+                    # Add break period (will validate later)
+                    break_period = {
+                        'start': last_timestamp,
+                        'end': timestamp,
+                        'events': [],
+                        'type': 'break'
+                    }
+                    periods.append(break_period)
+                    
+                    # Start new work period
+                    current_period = {
+                        'start': timestamp,
+                        'end': None,
+                        'events': [event],
+                        'type': 'work'
+                    }
+                else:
+                    # Continue current period
+                    current_period['events'].append(event)
+        
+        # Close final period
+        if current_period['events']:
+            current_period['end'] = self.parse_timestamp(current_period['events'][-1]['timestamp'])
+            periods.append(current_period)
+        
+        # Remove breaks that aren't between substantial work periods
+        # Only count a break if there's meaningful work both before AND after
+        filtered_periods = []
+        for i, period in enumerate(periods):
+            if period['type'] == 'break':
+                # Check if there's a work period after this break
+                has_work_after = False
+                if i + 1 < len(periods):
+                    next_period = periods[i + 1]
+                    # Only count as real break if next work period has 10+ events
+                    if next_period['type'] == 'work' and len(next_period['events']) >= 10:
+                        has_work_after = True
+                
+                # Only include break if there's substantial work after
+                if has_work_after:
+                    filtered_periods.append(period)
+            else:
+                # Always include work periods
+                filtered_periods.append(period)
+        
+        return filtered_periods
+    
+    def count_words(self, events):
+        """Count words by finding keystroke sequences ending in space"""
+        word_count = 0
+        current_chars = []
+        
+        for event in events:
+            if event['event_type'] == 'keystroke':
+                key = event['key']
+                if key == 'space':
+                    if current_chars:  # We completed a word
+                        word_count += 1
+                        current_chars = []
+                elif key in ['enter', 'tab', 'return']:
+                    if current_chars:  # End of word
+                        word_count += 1
+                        current_chars = []
+                elif key not in ['shift', 'ctrl', 'alt', 'cmd', 'shift_r', 
+                                'ctrl_r', 'alt_r', 'backspace', 'delete',
+                                'up', 'down', 'left', 'right', 'esc']:
+                    current_chars.append(key)
+        
+        # Count final word if exists
+        if current_chars:
+            word_count += 1
+        
+        return word_count
+    
+    def filter_events_by_date(self, events, target_date):
+        """Filter events that occurred on a specific date"""
+        filtered = []
+        for event in events:
+            timestamp = self.parse_timestamp(event['timestamp'])
+            if timestamp and timestamp.date() == target_date:
+                filtered.append(event)
+        return filtered
+    
+    def analyze_events(self, events, label="Summary"):
+        """Analyze events and return statistics"""
+        if not events:
+            return None
+        
+        # Detect periods
+        periods = self.detect_periods(events)
+        work_periods = [p for p in periods if p['type'] == 'work']
+        break_periods = [p for p in periods if p['type'] == 'break']
+        
+        # Count events by type
+        mouse_events = [e for e in events if e['event_type'] == 'click']
+        keyboard_events = [e for e in events if e['event_type'] == 'keystroke']
+        
+        # Calculate total time
+        first_event = self.parse_timestamp(events[0]['timestamp'])
+        last_event = self.parse_timestamp(events[-1]['timestamp'])
+        
+        # Calculate working time
+        work_time = sum([(p['end'] - p['start']).total_seconds() 
+                        for p in work_periods if p['end']])
+        
+        # Calculate break time
+        break_time = sum([(p['end'] - p['start']).total_seconds() 
+                         for p in break_periods if p['end']])
+        
+        # Calculate averages
+        avg_period_length = work_time / len(work_periods) if work_periods else 0
+        avg_period_events = sum([len(p['events']) for p in work_periods]) / len(work_periods) if work_periods else 0
+        avg_break_length = break_time / len(break_periods) if break_periods else 0
+        
+        # Count words and calculate WPM
+        word_count = self.count_words(events)
+        wpm = (word_count / (work_time / 60)) if work_time > 0 else 0
+        
+        # Calculate clicks per minute
+        cpm = (len(mouse_events) / (work_time / 60)) if work_time > 0 else 0
+        
+        # Group by program
+        program_stats = defaultdict(lambda: {'clicks': 0, 'keystrokes': 0, 'total': 0, 'time_seconds': 0})
+        
+        # Track time per program using work periods
+        for period in work_periods:
+            if not period['events']:
+                continue
+            
+            # Group events in this period by program
+            period_programs = defaultdict(list)
+            for event in period['events']:
+                period_programs[event['app']].append(event)
+            
+            # Calculate time spent in each program during this period
+            for program, prog_events in period_programs.items():
+                if len(prog_events) < 2:
+                    # Single event - estimate 1 second
+                    program_stats[program]['time_seconds'] += 1
+                else:
+                    # Time from first to last event in this program during this period
+                    first_time = self.parse_timestamp(prog_events[0]['timestamp'])
+                    last_time = self.parse_timestamp(prog_events[-1]['timestamp'])
+                    duration = (last_time - first_time).total_seconds()
+                    program_stats[program]['time_seconds'] += duration
+        
+        # Count events per program
+        for event in events:
+            program = event['app']
+            program_stats[program]['total'] += 1
+            if event['event_type'] == 'click':
+                program_stats[program]['clicks'] += 1
+            elif event['event_type'] == 'keystroke':
+                program_stats[program]['keystrokes'] += 1
+        
+        return {
+            'label': label,
+            'total_events': len(events),
+            'mouse_events': len(mouse_events),
+            'keyboard_events': len(keyboard_events),
+            'word_count': word_count,
+            'wpm': wpm,
+            'cpm': cpm,
+            'work_time_seconds': work_time,
+            'work_periods': len(work_periods),
+            'avg_period_length': avg_period_length,
+            'avg_period_events': avg_period_events,
+            'break_time_seconds': break_time,
+            'num_breaks': len(break_periods),
+            'avg_break_length': avg_break_length,
+            'program_stats': dict(program_stats),
+            'first_event': first_event,
+            'last_event': last_event
+        }
+    
+    def format_time(self, seconds):
+        """Format seconds into readable time string"""
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+        
+        if hours > 0:
+            return f"{hours}h {minutes}m {secs}s"
+        elif minutes > 0:
+            return f"{minutes}m {secs}s"
+        else:
+            return f"{secs}s"
+    
+    def generate_summary_report(self):
+        """Generate comprehensive summary report and save to file"""
+        # Create reports folder in data directory
+        reports_folder = os.path.join(self.data_folder, 'reports')
+        if not os.path.exists(reports_folder):
+            os.makedirs(reports_folder)
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        report_file = os.path.join(reports_folder, f'summary_{timestamp}.txt')
+        csv_file = os.path.join(reports_folder, f'summary_{timestamp}.csv')
+        
+        # Build report content
+        lines = []
+        lines.append("=" * 60)
+        lines.append("ACTIVITY TRACKER SUMMARY")
+        lines.append("=" * 60)
+        
+        # Load all events
+        all_events = self.load_all_events()
+        if not all_events:
+            lines.append("\nNo data found!")
+            # Save and return
+            with open(report_file, 'w', encoding='utf-8') as f:
+                f.write('\n'.join(lines))
+            return report_file, None
+        
+        # Sort by timestamp
+        all_events.sort(key=lambda x: x['timestamp'])
+        
+        # Get today's events
+        today = datetime.now().date()
+        today_events = self.filter_events_by_date(all_events, today)
+        
+        # Analyze today
+        today_stats = None
+        if today_events:
+            lines.append("\n📅 TODAY'S SUMMARY")
+            lines.append("-" * 60)
+            today_stats = self.analyze_events(today_events, "Today")
+            lines.extend(self.format_stats(today_stats))
+        else:
+            lines.append("\n📅 TODAY'S SUMMARY")
+            lines.append("-" * 60)
+            lines.append("No activity recorded today.")
+        
+        # Analyze lifetime
+        lines.append("\n📊 LIFETIME SUMMARY")
+        lines.append("-" * 60)
+        lifetime_stats = self.analyze_events(all_events, "Lifetime")
+        lines.extend(self.format_stats(lifetime_stats))
+        
+        # Print program comparison table
+        if today_events:
+            lines.append("\n📋 TODAY - PROGRAM USAGE TABLE")
+            lines.append("-" * 60)
+            lines.extend(self.format_program_table(today_stats['program_stats']))
+        
+        lines.append("\n📋 LIFETIME - PROGRAM USAGE TABLE")
+        lines.append("-" * 60)
+        lines.extend(self.format_program_table(lifetime_stats['program_stats']))
+        
+        lines.append("\n" + "=" * 60)
+        lines.append(f"Report generated at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        lines.append("=" * 60)
+        
+        # Save text report
+        with open(report_file, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(lines))
+        
+        # Save CSV report
+        self.save_csv_report(csv_file, today_stats, lifetime_stats)
+        
+        return report_file, csv_file
+    
+    def save_csv_report(self, csv_file, today_stats, lifetime_stats):
+        """Save summary metrics to CSV file for TouchDesigner"""
+        rows = []
+        
+        # CSV Header
+        rows.append(['metric', 'category', 'value', 'unit'])
+        
+        # Helper to add rows
+        def add_metric(metric_name, category, value, unit=''):
+            rows.append([metric_name, category, value, unit])
+        
+        # Today's metrics
+        if today_stats:
+            add_metric('total_events', 'today', today_stats['total_events'], 'count')
+            add_metric('mouse_events', 'today', today_stats['mouse_events'], 'count')
+            add_metric('keyboard_events', 'today', today_stats['keyboard_events'], 'count')
+            add_metric('word_count', 'today', today_stats['word_count'], 'count')
+            add_metric('wpm', 'today', round(today_stats['wpm'], 2), 'words/min')
+            add_metric('cpm', 'today', round(today_stats['cpm'], 2), 'clicks/min')
+            add_metric('work_time_seconds', 'today', round(today_stats['work_time_seconds'], 2), 'seconds')
+            add_metric('work_time_minutes', 'today', round(today_stats['work_time_seconds'] / 60, 2), 'minutes')
+            add_metric('work_time_hours', 'today', round(today_stats['work_time_seconds'] / 3600, 2), 'hours')
+            add_metric('work_periods', 'today', today_stats['work_periods'], 'count')
+            add_metric('avg_period_length_seconds', 'today', round(today_stats['avg_period_length'], 2), 'seconds')
+            add_metric('avg_period_length_minutes', 'today', round(today_stats['avg_period_length'] / 60, 2), 'minutes')
+            add_metric('avg_period_events', 'today', round(today_stats['avg_period_events'], 2), 'count')
+            add_metric('break_time_seconds', 'today', round(today_stats['break_time_seconds'], 2), 'seconds')
+            add_metric('break_time_minutes', 'today', round(today_stats['break_time_seconds'] / 60, 2), 'minutes')
+            add_metric('num_breaks', 'today', today_stats['num_breaks'], 'count')
+            add_metric('avg_break_length_seconds', 'today', round(today_stats['avg_break_length'], 2), 'seconds')
+            add_metric('avg_break_length_minutes', 'today', round(today_stats['avg_break_length'] / 60, 2), 'minutes')
+            
+            # Today's program stats
+            for program, stats in today_stats['program_stats'].items():
+                add_metric(f'program_{program}_time_seconds', 'today_programs', round(stats['time_seconds'], 2), 'seconds')
+                add_metric(f'program_{program}_time_minutes', 'today_programs', round(stats['time_seconds'] / 60, 2), 'minutes')
+                add_metric(f'program_{program}_clicks', 'today_programs', stats['clicks'], 'count')
+                add_metric(f'program_{program}_keystrokes', 'today_programs', stats['keystrokes'], 'count')
+                add_metric(f'program_{program}_total', 'today_programs', stats['total'], 'count')
+        
+        # Lifetime metrics
+        add_metric('total_events', 'lifetime', lifetime_stats['total_events'], 'count')
+        add_metric('mouse_events', 'lifetime', lifetime_stats['mouse_events'], 'count')
+        add_metric('keyboard_events', 'lifetime', lifetime_stats['keyboard_events'], 'count')
+        add_metric('word_count', 'lifetime', lifetime_stats['word_count'], 'count')
+        add_metric('wpm', 'lifetime', round(lifetime_stats['wpm'], 2), 'words/min')
+        add_metric('cpm', 'lifetime', round(lifetime_stats['cpm'], 2), 'clicks/min')
+        add_metric('work_time_seconds', 'lifetime', round(lifetime_stats['work_time_seconds'], 2), 'seconds')
+        add_metric('work_time_minutes', 'lifetime', round(lifetime_stats['work_time_seconds'] / 60, 2), 'minutes')
+        add_metric('work_time_hours', 'lifetime', round(lifetime_stats['work_time_seconds'] / 3600, 2), 'hours')
+        add_metric('work_periods', 'lifetime', lifetime_stats['work_periods'], 'count')
+        add_metric('avg_period_length_seconds', 'lifetime', round(lifetime_stats['avg_period_length'], 2), 'seconds')
+        add_metric('avg_period_length_minutes', 'lifetime', round(lifetime_stats['avg_period_length'] / 60, 2), 'minutes')
+        add_metric('avg_period_events', 'lifetime', round(lifetime_stats['avg_period_events'], 2), 'count')
+        add_metric('break_time_seconds', 'lifetime', round(lifetime_stats['break_time_seconds'], 2), 'seconds')
+        add_metric('break_time_minutes', 'lifetime', round(lifetime_stats['break_time_seconds'] / 60, 2), 'minutes')
+        add_metric('num_breaks', 'lifetime', lifetime_stats['num_breaks'], 'count')
+        add_metric('avg_break_length_seconds', 'lifetime', round(lifetime_stats['avg_break_length'], 2), 'seconds')
+        add_metric('avg_break_length_minutes', 'lifetime', round(lifetime_stats['avg_break_length'] / 60, 2), 'minutes')
+        
+        # Lifetime program stats
+        for program, stats in lifetime_stats['program_stats'].items():
+            add_metric(f'program_{program}_time_seconds', 'lifetime_programs', round(stats['time_seconds'], 2), 'seconds')
+            add_metric(f'program_{program}_time_minutes', 'lifetime_programs', round(stats['time_seconds'] / 60, 2), 'minutes')
+            add_metric(f'program_{program}_clicks', 'lifetime_programs', stats['clicks'], 'count')
+            add_metric(f'program_{program}_keystrokes', 'lifetime_programs', stats['keystrokes'], 'count')
+            add_metric(f'program_{program}_total', 'lifetime_programs', stats['total'], 'count')
+        
+        # Metadata
+        add_metric('report_timestamp', 'metadata', datetime.now().isoformat(), 'datetime')
+        add_metric('report_date', 'metadata', datetime.now().strftime('%Y-%m-%d'), 'date')
+        add_metric('report_time', 'metadata', datetime.now().strftime('%H:%M:%S'), 'time')
+        
+        # Write CSV
+        with open(csv_file, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerows(rows)
+    
+    def format_stats(self, stats):
+        """Format statistics as list of strings"""
+        if not stats:
+            return []
+        
+        lines = []
+        lines.append(f"\nTotal Events: {stats['total_events']:,}")
+        lines.append(f"  └─ Mouse: {stats['mouse_events']:,}")
+        lines.append(f"  └─ Keyboard: {stats['keyboard_events']:,}")
+        lines.append(f"\nWords per Minute: {stats['wpm']:.1f}")
+        lines.append(f"Clicks per Minute: {stats['cpm']:.1f}")
+        
+        lines.append(f"\n⏱️  Time Working: {self.format_time(stats['work_time_seconds'])}")
+        lines.append(f"  └─ Working Periods: {stats['work_periods']}")
+        lines.append(f"  └─ Avg Period Length: {self.format_time(stats['avg_period_length'])}")
+        lines.append(f"  └─ Avg Period Events: {stats['avg_period_events']:.0f}")
+        
+        lines.append(f"\n☕ Time on Break: {self.format_time(stats['break_time_seconds'])}")
+        lines.append(f"  └─ Number of Breaks: {stats['num_breaks']}")
+        if stats['num_breaks'] > 0:
+            lines.append(f"  └─ Avg Break Length: {self.format_time(stats['avg_break_length'])}")
+        
+        return lines
+    
+    def format_program_table(self, program_stats):
+        """Format program comparison table as list of strings"""
+        if not program_stats:
+            return []
+        
+        lines = []
+        
+        # Sort by total events
+        sorted_programs = sorted(program_stats.items(), 
+                                key=lambda x: x[1]['total'], 
+                                reverse=True)
+        
+        # Print header
+        lines.append(f"\n{'Program':<30} {'Time':>10} {'Clicks':>10} {'Keys':>10} {'Total':>10}")
+        lines.append("-" * 73)
+        
+        # Print rows
+        for program, stats in sorted_programs:
+            time_str = self.format_time(stats['time_seconds'])
+            lines.append(f"{program:<30} {time_str:>10} {stats['clicks']:>10,} {stats['keystrokes']:>10,} {stats['total']:>10,}")
+        
+        # Print totals
+        total_time = sum([s['time_seconds'] for s in program_stats.values()])
+        total_clicks = sum([s['clicks'] for s in program_stats.values()])
+        total_keystrokes = sum([s['keystrokes'] for s in program_stats.values()])
+        total_events = sum([s['total'] for s in program_stats.values()])
+        lines.append("-" * 73)
+        lines.append(f"{'TOTAL':<30} {self.format_time(total_time):>10} {total_clicks:>10,} {total_keystrokes:>10,} {total_events:>10,}")
+        
+        return lines
+
+
 class ActivityTrackerGUI:
     """Compact customizable GUI for the Activity Tracker"""
     
     def __init__(self):
         self.tracker = ActivityTracker(autosave_interval=30)
+        self.summary = ActivitySummary(data_folder=self.tracker.data_folder)
         
         # Create main window
         self.root = tk.Tk()
@@ -362,14 +826,14 @@ class ActivityTrackerGUI:
                 
                 # Create buttons with customizable colors
                 button_y = height//2
-                button_spacing = 90
-                start_x = width//2 - button_spacing
+                button_spacing = 70
+                start_x = width//2 - button_spacing * 1.5
                 
                 self.toggle_btn = tk.Button(self.root, text="STOP",
                                             command=self.toggle_tracking,
                                             font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
                                             bg=BUTTON_STOP_BG, fg=BUTTON_TEXT_COLOR,
-                                            width=8, height=1, 
+                                            width=7, height=1, 
                                             relief=tk.FLAT, bd=0)
                 self.canvas.create_window(start_x, button_y, window=self.toggle_btn)
                 
@@ -377,17 +841,25 @@ class ActivityTrackerGUI:
                                          command=self.toggle_mode,
                                          font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
                                          bg=BUTTON_MODE_BG, fg=BUTTON_TEXT_COLOR,
-                                         width=8, height=1,
+                                         width=7, height=1,
                                          relief=tk.FLAT, bd=0)
                 self.canvas.create_window(start_x + button_spacing, button_y, window=self.mode_btn)
+                
+                self.summary_btn = tk.Button(self.root, text="SUMMARY",
+                                            command=self.show_summary,
+                                            font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
+                                            bg="#2D9C9C", fg=BUTTON_TEXT_COLOR,
+                                            width=7, height=1,
+                                            relief=tk.FLAT, bd=0)
+                self.canvas.create_window(start_x + button_spacing*2, button_y, window=self.summary_btn)
                 
                 self.folder_btn = tk.Button(self.root, text="FOLDER",
                                            command=self.open_data_folder,
                                            font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
                                            bg=BUTTON_FOLDER_BG, fg=BUTTON_TEXT_COLOR,
-                                           width=8, height=1,
+                                           width=7, height=1,
                                            relief=tk.FLAT, bd=0)
-                self.canvas.create_window(start_x + button_spacing*2, button_y, window=self.folder_btn)
+                self.canvas.create_window(start_x + button_spacing*3, button_y, window=self.folder_btn)
                 
                 # Stats label at bottom  
                 self.stats_label = tk.Label(self.root, text="0m 0s | 0 events", 
@@ -409,7 +881,7 @@ class ActivityTrackerGUI:
                                             command=self.toggle_tracking,
                                             font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
                                             bg=BUTTON_STOP_BG, fg='#FFFFFF',
-                                            width=8, height=1, 
+                                            width=7, height=1, 
                                             relief=tk.FLAT, bd=0)
                 self.toggle_btn.pack(side=tk.LEFT, padx=2)
                 
@@ -417,15 +889,23 @@ class ActivityTrackerGUI:
                                          command=self.toggle_mode,
                                          font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
                                          bg=BUTTON_MODE_BG, fg='#FFFFFF',
-                                         width=8, height=1,
+                                         width=7, height=1,
                                          relief=tk.FLAT, bd=0)
                 self.mode_btn.pack(side=tk.LEFT, padx=2)
+                
+                self.summary_btn = tk.Button(button_frame, text="SUMMARY",
+                                            command=self.show_summary,
+                                            font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
+                                            bg="#2D9C9C", fg='#FFFFFF',
+                                            width=7, height=1,
+                                            relief=tk.FLAT, bd=0)
+                self.summary_btn.pack(side=tk.LEFT, padx=2)
                 
                 self.folder_btn = tk.Button(button_frame, text="FOLDER",
                                            command=self.open_data_folder,
                                            font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
                                            bg=BUTTON_FOLDER_BG, fg='#FFFFFF',
-                                           width=8, height=1,
+                                           width=7, height=1,
                                            relief=tk.FLAT, bd=0)
                 self.folder_btn.pack(side=tk.LEFT, padx=2)
                 
@@ -483,6 +963,30 @@ class ActivityTrackerGUI:
         else:
             self.mode_btn.config(text="APP")
             print("Switched to App-Specific mode")
+    
+    def show_summary(self):
+        """Generate and display activity summary in a file"""
+        print("\n🔍 Generating summary report...")
+        
+        # Generate report (this returns the file paths)
+        report_file, csv_file = self.summary.generate_summary_report()
+        
+        print(f"✓ Text report saved to: {report_file}")
+        if csv_file:
+            print(f"✓ CSV report saved to: {csv_file}")
+        
+        # Open the text file automatically
+        try:
+            if platform.system() == 'Darwin':  # macOS
+                subprocess.run(['open', report_file])
+            elif platform.system() == 'Windows':
+                subprocess.run(['start', report_file], shell=True)
+            else:  # Linux
+                subprocess.run(['xdg-open', report_file])
+            print("✓ Report opened!")
+        except Exception as e:
+            print(f"Report saved but couldn't auto-open: {e}")
+            print(f"You can manually open: {report_file}")
     
     def open_data_folder(self):
         """Open the activity_data folder"""
