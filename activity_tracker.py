@@ -319,6 +319,62 @@ class ActivitySummary:
         except:
             return None
     
+    def detect_periods_raw(self, events):
+        """Detect working periods and breaks WITHOUT filtering - for timeline display"""
+        if not events:
+            return []
+        
+        periods = []
+        current_period = {
+            'start': None,
+            'end': None,
+            'events': [],
+            'type': 'work'
+        }
+        
+        for i, event in enumerate(events):
+            timestamp = self.parse_timestamp(event['timestamp'])
+            if not timestamp:
+                continue
+            
+            if current_period['start'] is None:
+                current_period['start'] = timestamp
+                current_period['events'].append(event)
+            else:
+                last_timestamp = self.parse_timestamp(current_period['events'][-1]['timestamp'])
+                time_gap = (timestamp - last_timestamp).total_seconds()
+                
+                if time_gap > self.break_threshold:
+                    # End current period
+                    current_period['end'] = last_timestamp
+                    periods.append(current_period)
+                    
+                    # Add break period (ALWAYS include for timeline)
+                    break_period = {
+                        'start': last_timestamp,
+                        'end': timestamp,
+                        'events': [],
+                        'type': 'break'
+                    }
+                    periods.append(break_period)
+                    
+                    # Start new work period
+                    current_period = {
+                        'start': timestamp,
+                        'end': None,
+                        'events': [event],
+                        'type': 'work'
+                    }
+                else:
+                    current_period['events'].append(event)
+        
+        # Close final period
+        if current_period['events']:
+            current_period['end'] = self.parse_timestamp(current_period['events'][-1]['timestamp'])
+            periods.append(current_period)
+        
+        return periods
+    
     def detect_periods(self, events):
         """Detect working periods and breaks in event list"""
         if not events:
@@ -472,10 +528,12 @@ class ActivitySummary:
         # Calculate clicks per minute
         cpm = (len(mouse_events) / (work_time / 60)) if work_time > 0 else 0
         
-        # Group by program
+        # Group by program - calculate ACTIVE time only
         program_stats = defaultdict(lambda: {'clicks': 0, 'keystrokes': 0, 'total': 0, 'time_seconds': 0})
         
-        # Track time per program using work periods
+        # Track active time per program (only count time between nearby events)
+        activity_threshold = 30  # Count time between events if they're within 30 seconds
+        
         for period in work_periods:
             if not period['events']:
                 continue
@@ -485,17 +543,22 @@ class ActivitySummary:
             for event in period['events']:
                 period_programs[event['app']].append(event)
             
-            # Calculate time spent in each program during this period
+            # Calculate ACTIVE time spent in each program
             for program, prog_events in period_programs.items():
                 if len(prog_events) < 2:
-                    # Single event - estimate 1 second
+                    # Single event - count as 1 second of activity
                     program_stats[program]['time_seconds'] += 1
                 else:
-                    # Time from first to last event in this program during this period
-                    first_time = self.parse_timestamp(prog_events[0]['timestamp'])
-                    last_time = self.parse_timestamp(prog_events[-1]['timestamp'])
-                    duration = (last_time - first_time).total_seconds()
-                    program_stats[program]['time_seconds'] += duration
+                    # Sum up time between consecutive events if they're close together
+                    for i in range(len(prog_events) - 1):
+                        current_time = self.parse_timestamp(prog_events[i]['timestamp'])
+                        next_time = self.parse_timestamp(prog_events[i + 1]['timestamp'])
+                        gap = (next_time - current_time).total_seconds()
+                        
+                        # Only count the gap if events are close together (active usage)
+                        if gap <= activity_threshold:
+                            program_stats[program]['time_seconds'] += gap
+                        # If gap > threshold, don't count that idle time
         
         # Count events per program
         for event in events:
@@ -575,11 +638,17 @@ class ActivitySummary:
         
         # Analyze today
         today_stats = None
+        today_periods = []
         if today_events:
             lines.append("\n📅 TODAY'S SUMMARY")
             lines.append("-" * 60)
             today_stats = self.analyze_events(today_events, "Today")
             lines.extend(self.format_stats(today_stats))
+            
+            # Generate timeline - use RAW periods before filtering
+            # This shows all gaps including ones at end of sessions
+            raw_periods = self.detect_periods_raw(today_events)
+            lines.extend(self.generate_timeline(raw_periods, "Today"))
         else:
             lines.append("\n📅 TODAY'S SUMMARY")
             lines.append("-" * 60)
@@ -613,6 +682,62 @@ class ActivitySummary:
         self.save_csv_report(csv_file, today_stats, lifetime_stats)
         
         return report_file, csv_file
+    
+    def generate_timeline(self, periods, date_label="Today"):
+        """Generate hourly timeline of work vs break periods"""
+        if not periods:
+            return []
+        
+        lines = []
+        lines.append(f"\n🕐 {date_label.upper()} - HOURLY TIMELINE")
+        lines.append("-" * 60)
+        
+        if not periods:
+            lines.append("No activity data")
+            return lines
+        
+        # Get session start and end
+        all_times = []
+        for period in periods:
+            if period['start']:
+                all_times.append(period['start'])
+            if period['end']:
+                all_times.append(period['end'])
+        
+        if not all_times:
+            lines.append("No activity data")
+            return lines
+        
+        session_start = min(all_times)
+        session_end = max(all_times)
+        
+        # Add session start
+        lines.append(f"{session_start.strftime('%I:%M %p').lstrip('0'):<15} | Session Started")
+        
+        # Process each period - show state changes
+        for i, period in enumerate(periods):
+            if not period['start'] or not period['end']:
+                continue
+            
+            start_time = period['start'].strftime('%I:%M %p').lstrip('0')
+            
+            if period['type'] == 'work':
+                # Show when working starts
+                lines.append(f"{start_time:<15} | Working")
+            
+            elif period['type'] == 'break':
+                # Calculate break duration
+                duration = (period['end'] - period['start']).total_seconds() / 60
+                
+                if duration >= 30:
+                    lines.append(f"{start_time:<15} | Stepped Away ({int(duration)} min)")
+                else:
+                    lines.append(f"{start_time:<15} | Break ({int(duration)} min)")
+        
+        # Add session end
+        lines.append(f"{session_end.strftime('%I:%M %p').lstrip('0'):<15} | Session Ended")
+        
+        return lines
     
     def save_csv_report(self, csv_file, today_stats, lifetime_stats):
         """Save summary metrics to CSV file for TouchDesigner"""
@@ -686,6 +811,14 @@ class ActivitySummary:
         add_metric('report_timestamp', 'metadata', datetime.now().isoformat(), 'datetime')
         add_metric('report_date', 'metadata', datetime.now().strftime('%Y-%m-%d'), 'date')
         add_metric('report_time', 'metadata', datetime.now().strftime('%H:%M:%S'), 'time')
+        
+        # Timeline data (if today stats exist)
+        if today_stats:
+            # Detect periods again to get timeline
+            today_events_list = []
+            # We don't have access to today_events here, so we'll skip timeline in CSV
+            # Timeline is more useful in the text report anyway
+            pass
         
         # Write CSV
         with open(csv_file, 'w', newline='', encoding='utf-8') as f:
