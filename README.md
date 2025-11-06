@@ -6,26 +6,6 @@ Track every keystroke and click, see which applications you use most, and analyz
 
 ---
 
-## Table of Contents
-
-- [What It Does](#what-it-does)
-- [Key Features](#key-features)
-- [Installation](#installation)
-- [Building a Standalone App (Optional)](#building-a-standalone-app-optional)
-- [How to Use](#how-to-use)
-- [Data Format](#data-format)
-- [Use Cases](#use-cases)
-- [Customization](#customization)
-- [Troubleshooting](#troubleshooting)
-- [Privacy & Security](#privacy--security)
-- [Technical Details](#technical-details)
-- [How It Works: Code Breakdown](#how-it-works-code-breakdown)
-- [FAQ](#faq)
-- [Credits](#credits)
-- [License](#license)
-
----
-
 ![ref app](ref/ref-GUI.png)
 
 ## What It Does
@@ -50,7 +30,7 @@ All data is saved locally to CSV files that you can analyze later.
 - Four buttons: 
   - STOP/START | activate / de-activated tracking
   - APP/GLOBAL | switch between app-specific / global tracking
-  - SUMMARY | generate analytics report (NEW!)
+  - SUMMARY | generate analytics report
   - FOLDER | open folder containing saved data
 
 ### **Analytics & Reporting**
@@ -78,9 +58,6 @@ All data is saved locally to CSV files that you can analyze later.
 - Change fonts and sizes
 - Adjust window dimensions
 - Set auto-save interval
-- Change custom background image (320x120px)
-
-![ref app](ref/ref-GUI-bg.png)
 
 ---
 
@@ -89,7 +66,7 @@ All data is saved locally to CSV files that you can analyze later.
 ### Requirements
 
 - **macOS** (Windows/Linux compatible with minor tweaks)
-- **Python 3.11** âš ï¸ **Important: Must use 3.11, NOT 3.14!**
+- **Python 3.11** ⚠️ **Important: Must use 3.11, NOT 3.14!**
 - **Homebrew** (for macOS dependencies)
 
 ### Step 1: Install Python 3.11
@@ -124,14 +101,14 @@ Save `activity_tracker.py` to a folder on your computer.
 The app needs permission to monitor keyboard and mouse:
 
 1. Run the app once: `python3.11 activity_tracker.py`
-2. Go to **System Preferences** â†’ **Security & Privacy** â†’ **Privacy**
+2. Go to **System Preferences** → **Security & Privacy** → **Privacy**
 3. Select **Accessibility** from the left sidebar
-4. Click the lock ðŸ”’ and enter your password
+4. Click the lock 🔒 and enter your password
 5. Click **+** and add Python 3.11:
    - Press **Cmd + Shift + G**
    - Paste: `/opt/homebrew/Cellar/python@3.11/3.11.14/Frameworks/Python.framework/Versions/3.11/Resources/Python.app`
    - Click **Open**
-6. Check the box âœ“ next to Python
+6. Check the box ✓ next to Python
 7. Do the same for **Input Monitoring**
 8. Restart the app
 
@@ -146,13 +123,11 @@ Want to run Activity Tracker as a double-clickable macOS app without opening Ter
 - Everything from the Installation section above
 - **py2app** package for building macOS apps
 
-### Step 1: Install py2app and All Dependencies
+### Step 1: Install py2app
 
 ```bash
-pip3.11 install py2app macholib modulegraph altgraph --break-system-packages
+pip3.11 install py2app --break-system-packages
 ```
-
-**Note:** py2app requires several dependencies (`macholib`, `modulegraph`, `altgraph`). Installing them all together prevents cascading dependency errors during the build.
 
 ### Step 2: Build the App
 
@@ -205,7 +180,7 @@ Once built and moved to Applications:
 
 - **Double-click** to launch (no Terminal needed!)
 - The app runs identically to the Python script
-- Data still saves to `activity_data/` in the same folder
+- Data still saves to `activity_data/` which is now located within the package contents folder
 - Click FOLDER button to open the data directory
 
 ### Cleaning Up Build Files
@@ -245,29 +220,19 @@ mv dist/Activity\ Tracker.app /Applications/
 
 ### Troubleshooting
 
-**Missing py2app dependencies**
-```
-pkg_resources.DistributionNotFound: The 'macholib>=1.16.2' distribution was not found
-pkg_resources.DistributionNotFound: The 'modulegraph>=0.19.6' distribution was not found
-```
-- Install all dependencies at once: `pip3.11 install py2app macholib modulegraph altgraph --break-system-packages`
-- Then rebuild: `python3.11 setup.py py2app -A`
-- **Tip:** If you see multiple "distribution not found" errors, just install all the missing packages together
-
-**setuptools deprecation warnings**
-- You may see warnings about `setuptools.installer` and `pkg_resources` being deprecated
-- These are harmless warnings from py2app and won't affect the build
-- The app will still build and run correctly
-
 **"Activity Tracker.app" is damaged and can't be opened**
 - This happens when macOS can't verify the app
-- Right-click â†’ Open instead of double-clicking
+- Right-click → Open instead of double-clicking
 - Or run: `xattr -cr /Applications/Activity\ Tracker.app`
 
 **App doesn't start / crashes immediately**
 - Check that you built with Python 3.11 (not 3.14)
 - Verify all dependencies are installed
 - Try running the Python script directly to see error messages
+
+**Missing icon**
+- Make sure the icon file exists at the path specified in `setup.py`
+- Or remove the `'iconfile'` line to use the default Python icon
 
 **Data folder not found**
 - The app creates `activity_data/` relative to where it's located
@@ -298,13 +263,13 @@ The app will:
 ### The Interface
 
 ```
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚      TRACKING           â”‚
-â”‚                         â”‚
-â”‚  [STOP] [APP] [FOLDER]  â”‚
-â”‚                         â”‚
-â”‚   2m 30s | 145 events   â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌──────────────────────────────────────┐
+│           TRACKING                   │
+│                                      │
+│  [STOP] [APP] [SUMMARY] [FOLDER]    │
+│                                      │
+│       2m 30s | 145 events            │
+└──────────────────────────────────────┘
 ```
 
 **STOP/START** - Toggle tracking on/off
@@ -331,9 +296,9 @@ All sessions are saved as CSV files in the `activity_data/` folder:
 
 ```
 activity_data/
-  â”œâ”€â”€ session_20251023_143500.csv
-  â”œâ”€â”€ session_20251023_150200.csv
-  â””â”€â”€ session_20251023_152700.csv
+  ├── session_20251023_143500.csv
+  ├── session_20251023_150200.csv
+  └── session_20251023_152700.csv
 ```
 
 Each CSV file contains:
@@ -354,8 +319,8 @@ Activity Tracker Started
 ========================================
 Tracking started... Session ID: 20251023_143500
 Creating listeners for the first time...
-âœ“ Keyboard listener started
-âœ“ Mouse listener started
+✓ Keyboard listener started
+✓ Mouse listener started
 [Chrome] keystroke: h
 [Chrome] keystroke: e
 [Chrome] keystroke: l
@@ -386,9 +351,9 @@ Files are named with session start time:
 
 ```
 session_YYYYMMDD_HHMMSS.csv
-        â”‚       â”‚
-        â”‚       â””â”€ Hour, minute, second
-        â””â”€â”€â”€â”€â”€â”€â”€â”€â”€ Year, month, day
+        │       │
+        │       └─ Hour, minute, second
+        └───────── Year, month, day
 ```
 
 ### File Size
@@ -407,12 +372,10 @@ CSV format is 50% smaller than JSON!
 ## Use Cases
 
 ### Analytics + Productivity
-- Generate comprehensive summary reports (TXT + CSV)
 - Track your daily computer usage patterns
-- Measure typing speed (WPM) and clicking rate (CPM)
-- Analyze time spent per application
-- Monitor work periods and break patterns
-- Export data to TouchDesigner or other tools
+- Measure typing speed and activity levels
+- Measure time spent in different applications / see which apps you use most
+- Track breaks and active periods / find your most productive hours
 
 ### Data Analysis Projects
 - Import CSVs into Excel, Python, R
@@ -526,21 +489,21 @@ pip3.11 install pynput pillow --break-system-packages
 
 ### What Gets Recorded
 
-âœ… **YES** - Key presses (which key)
+✅ **YES** - Key presses (which key)
 
-âœ… **YES** - Mouse clicks (which button)
+✅ **YES** - Mouse clicks (which button)
 
-âœ… **YES** - Application names
+✅ **YES** - Application names
 
-âœ… **YES** - Timestamps
+✅ **YES** - Timestamps
 
-âŒ **NO** - Screenshots or screen content
+❌ **NO** - Screenshots or screen content
 
-âŒ **NO** - Cursor positions
+❌ **NO** - Cursor positions
 
-âŒ **NO** - Window titles or URLs
+❌ **NO** - Window titles or URLs
 
-âŒ **NO** - File paths or documents
+❌ **NO** - File paths or documents
 
 ### Data Storage
 
@@ -570,26 +533,26 @@ It does **NOT** require:
 ### Architecture
 
 ```
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  GUI (Tkinter)                      â”‚
-â”‚  - Display window                   â”‚
-â”‚  - Update stats                     â”‚
-â”‚  - Control buttons                  â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-               â”‚
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  ActivityTracker                    â”‚
-â”‚  - Record events                    â”‚
-â”‚  - Manage sessions                  â”‚
-â”‚  - Save to CSV                      â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-               â”‚
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  Listeners (pynput)                 â”‚
-â”‚  - Keyboard monitoring              â”‚
-â”‚  - Mouse monitoring                 â”‚
-â”‚  - Run continuously                 â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+┌─────────────────────────────────────┐
+│  GUI (Tkinter)                      │
+│  - Display window                   │
+│  - Update stats                     │
+│  - Control buttons                  │
+└──────────────┬──────────────────────┘
+               │
+┌──────────────▼──────────────────────┐
+│  ActivityTracker                    │
+│  - Record events                    │
+│  - Manage sessions                  │
+│  - Save to CSV                      │
+└──────────────┬──────────────────────┘
+               │
+┌──────────────▼──────────────────────┐
+│  Listeners (pynput)                 │
+│  - Keyboard monitoring              │
+│  - Mouse monitoring                 │
+│  - Run continuously                 │
+└─────────────────────────────────────┘
 ```
 
 ### Threading Model
@@ -614,199 +577,6 @@ It does **NOT** require:
 2. **Python 3.14 incompatibility**: pynput has breaking issues with Python 3.14. Always use Python 3.11.
 
 3. **Listeners can't restart**: pynput listeners can't be stopped and restarted. This is why we keep them running continuously and just toggle the recording flag.
-
----
-
-## How It Works: Code Breakdown
-
-Want to understand what's happening under the hood? Here's a plain-language explanation of the code and libraries.
-
-### The py2app Dependencies
-
-When building the standalone app, py2app needs several helper libraries:
-
-**altgraph**
-- Creates and analyzes graph data structures (nodes and connections)
-- Think of it like mapping relationships: "A connects to B, B connects to C"
-- Used by the other tools to track relationships between code modules
-
-**modulegraph**
-- Analyzes your Python code to find ALL the modules/packages your app uses
-- Follows the import chain: "You import X, X imports Y, Y imports Z..."
-- Creates a complete dependency tree so py2app knows what to bundle
-- Uses altgraph to store this tree structure
-
-**macholib**
-- Reads and modifies Mach-O files (the executable format on macOS)
-- Mach-O = "Mach Object" (like .exe on Windows, but for macOS/iOS)
-- Helps py2app understand compiled libraries and frameworks
-- Fixes paths to dynamic libraries so they work inside the app bundle
-
-**How they work together:**
-1. `modulegraph` (using `altgraph`) finds all your Python dependencies
-2. `macholib` handles the compiled/binary dependencies (C libraries, frameworks)
-3. `py2app` uses both to package everything into a .app bundle
-
-### Code Structure
-
-The `activity_tracker.py` file has three main sections:
-
-#### 1. Imports & Setup (Lines 1-76)
-
-```python
-import tkinter as tk  # GUI framework
-from pynput import keyboard, mouse  # Listen to keyboard/mouse
-from AppKit import NSWorkspace  # Get active app name (macOS)
-```
-
-- Loads all the tools needed
-- Sets up customization variables (colors, fonts, window size)
-- Imports macOS-specific frameworks for tracking which app is active
-
-#### 2. ActivityTracker Class (Lines 79-252)
-
-**The Core Tracking Engine**
-
-`__init__()` - Initialization
-- Creates the `activity_data/` folder
-- Sets up variables to track sessions and events
-- Prepares everything but doesn't start listeners yet
-
-`get_active_application()` - Which app is the user in?
-- Asks macOS "which app window is in front right now?"
-- Uses NSWorkspace (macOS framework) to check the active window
-- Returns app name like "Chrome" or "Finder"
-
-`record_event()` - Save a keystroke or click
-- Creates a timestamp (ISO 8601 format)
-- Gets the active app name
-- Adds event to a list
-- Prints to terminal for immediate feedback
-- Auto-saves to CSV every 60 seconds
-
-`on_key_press()` & `on_click()` - Input callbacks
-- pynput calls these functions automatically when input happens
-- They extract the key/button info and pass it to `record_event()`
-
-`start_tracking()` - Begin a new session
-- Creates a unique session ID (timestamp: `20251025_143000`)
-- Creates listeners if they don't exist yet (keyboard & mouse)
-- Sets `self.tracking = True` so events get recorded
-
-`stop_tracking()` - Pause recording
-- Saves current session to CSV
-- Sets `self.tracking = False`
-- Note: listeners keep running in background, just don't record
-
-`save_session()` - Write events to CSV file
-- Opens/creates a CSV file in `activity_data/`
-- Writes all events with columns: timestamp, app, event_type, key
-- Clears the event list for the next batch
-
-#### 3. GUI Class (Lines 288-496)
-
-**The Visual Interface**
-
-**Initialization:**
-- Creates a small window (320x120 pixels)
-- Loads background image if available, otherwise uses solid color
-- Creates the ActivityTracker instance
-- Starts tracking automatically on launch
-
-**UI Components:**
-```
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚    TRACKING         â”‚  â† Status label
-â”‚                     â”‚
-â”‚ [STOP] [APP] [FOLDER] â”‚  â† Control buttons
-â”‚                     â”‚
-â”‚  2m 30s | 145 events â”‚  â† Stats label
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-```
-
-**Button Functions:**
-
-`toggle_tracking()` - STOP/START button
-- Stops or starts recording (not the listeners!)
-- Updates button text and status label color
-
-`toggle_mode()` - APP/GLOBAL button
-- Switches between tracking by app vs. tracking everything as "Global"
-
-`open_data_folder()` - FOLDER button
-- Opens the `activity_data/` folder in Finder
-
-`update_status()` - Status display loop
-- Updates every second
-- Shows elapsed time and event count while tracking
-- Shows total events when stopped
-- Uses `self.root.after(1000, ...)` to create a repeating timer
-
-### The Flow: What Happens When
-
-**When you launch the app:**
-1. Creates GUI window
-2. Creates ActivityTracker instance
-3. Starts tracking thread
-4. Starts keyboard listener thread
-5. Starts mouse listener thread
-6. Begins status update loop
-
-**When you type or click:**
-1. pynput listener catches the event in its background thread
-2. Calls `on_key_press()` or `on_click()`
-3. Calls `record_event()` with the key/button info
-4. Adds event to the session list
-5. Prints to terminal for feedback
-6. Every 60 seconds, auto-saves entire list to CSV
-
-**When you click STOP:**
-1. Sets `self.tracking = False`
-2. Saves current session to CSV file
-3. Listeners keep running (can't stop/restart them reliably)
-4. Events are captured but ignored until you click START
-
-**When you click START:**
-1. Creates new session ID (new timestamp)
-2. Sets `self.tracking = True`
-3. Events start recording again to a new CSV file
-
-**When you close the app:**
-1. Calls `on_closing()`
-2. Saves final session
-3. Destroys GUI window
-4. Listeners stop automatically (they're daemon threads)
-
-### Key Design Decisions
-
-**Why listeners run continuously:**
-- pynput listeners can't be reliably stopped and restarted
-- Solution: keep them running, use a boolean flag (`self.tracking`) to control recording
-- STOP button = pause recording, START button = resume recording
-
-**Why threading:**
-- GUI needs the main thread to stay responsive
-- Listeners need background threads to monitor input
-- Status updates need a timer loop
-- Without threading, the GUI would freeze waiting for input
-
-**Why CSV instead of JSON:**
-- Much smaller file size (~50% savings for large datasets)
-- Easier to import into Excel, Pandas, R, or other analysis tools
-- Simple tabular structure: one event per row
-- Fast to write (append mode)
-
-**Why auto-save every 60 seconds:**
-- Prevents data loss if the app crashes
-- Low overhead (CSV writes are fast)
-- Customizable via `autosave_interval` parameter
-- Keeps memory usage low by clearing the event list
-
-**Why session-based files:**
-- Each START creates a new file with unique timestamp
-- Easy to analyze individual work sessions
-- No risk of corrupting all your data if one save fails
-- Natural separation of time periods
 
 ---
 
@@ -848,7 +618,7 @@ A: No. It uses minimal resources and runs efficiently in the background.
 
 ## Credits
 
-Code by Claude 
+Code by Claude
 Prompts + edits by Traversable Dale 
 (October 2025)
 
