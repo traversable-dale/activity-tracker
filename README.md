@@ -78,7 +78,7 @@ All data is saved locally to CSV files that you can analyze later.
 - Change fonts and sizes
 - Adjust window dimensions
 - Set auto-save interval
-- Change backgroun image
+- Change custom background image (320x120px)
 
 ![ref app](ref/ref-GUI-bg.png)
 
