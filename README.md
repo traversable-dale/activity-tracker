@@ -47,10 +47,19 @@ All data is saved locally to CSV files that you can analyze later.
 - Clean black and white interface
 - Compact 320x120 window
 - Clock + Event counter
-- Three buttons: 
+- Four buttons: 
   - STOP/START | activate / de-activated tracking
   - APP/GLOBAL | switch between app-specific / global tracking
+  - SUMMARY | generate analytics report (NEW!)
   - FOLDER | open folder containing saved data
+
+### **Analytics & Reporting**
+- Generate comprehensive summary reports
+- Today vs Lifetime statistics
+- Words per minute (WPM) & Clicks per minute (CPM)
+- Work periods & break analysis
+- Time spent per application
+- Export to TXT + CSV formats
 
 ### **Smart Data Collection**
 - Tracks by application OR globally
@@ -69,6 +78,9 @@ All data is saved locally to CSV files that you can analyze later.
 - Change fonts and sizes
 - Adjust window dimensions
 - Set auto-save interval
+- Change backgroun image
+
+![ref app](ref/ref-GUI-bg.png)
 
 ---
 
@@ -77,7 +89,7 @@ All data is saved locally to CSV files that you can analyze later.
 ### Requirements
 
 - **macOS** (Windows/Linux compatible with minor tweaks)
-- **Python 3.11** ⚠️ **Important: Must use 3.11, NOT 3.14!**
+- **Python 3.11** âš ï¸ **Important: Must use 3.11, NOT 3.14!**
 - **Homebrew** (for macOS dependencies)
 
 ### Step 1: Install Python 3.11
@@ -112,14 +124,14 @@ Save `activity_tracker.py` to a folder on your computer.
 The app needs permission to monitor keyboard and mouse:
 
 1. Run the app once: `python3.11 activity_tracker.py`
-2. Go to **System Preferences** → **Security & Privacy** → **Privacy**
+2. Go to **System Preferences** â†’ **Security & Privacy** â†’ **Privacy**
 3. Select **Accessibility** from the left sidebar
-4. Click the lock 🔒 and enter your password
+4. Click the lock ðŸ”’ and enter your password
 5. Click **+** and add Python 3.11:
    - Press **Cmd + Shift + G**
    - Paste: `/opt/homebrew/Cellar/python@3.11/3.11.14/Frameworks/Python.framework/Versions/3.11/Resources/Python.app`
    - Click **Open**
-6. Check the box ✓ next to Python
+6. Check the box âœ“ next to Python
 7. Do the same for **Input Monitoring**
 8. Restart the app
 
@@ -249,7 +261,7 @@ pkg_resources.DistributionNotFound: The 'modulegraph>=0.19.6' distribution was n
 
 **"Activity Tracker.app" is damaged and can't be opened**
 - This happens when macOS can't verify the app
-- Right-click → Open instead of double-clicking
+- Right-click â†’ Open instead of double-clicking
 - Or run: `xattr -cr /Applications/Activity\ Tracker.app`
 
 **App doesn't start / crashes immediately**
@@ -286,13 +298,13 @@ The app will:
 ### The Interface
 
 ```
-┌─────────────────────────┐
-│      TRACKING           │
-│                         │
-│  [STOP] [APP] [FOLDER]  │
-│                         │
-│   2m 30s | 145 events   │
-└─────────────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚      TRACKING           â”‚
+â”‚                         â”‚
+â”‚  [STOP] [APP] [FOLDER]  â”‚
+â”‚                         â”‚
+â”‚   2m 30s | 145 events   â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 **STOP/START** - Toggle tracking on/off
@@ -300,6 +312,14 @@ The app will:
 **APP/GLOBAL** - Switch modes:
 - **APP mode**: Track which application each event belongs to
 - **GLOBAL mode**: Track all events without app names
+
+**SUMMARY** - Generate analytics report:
+- Creates TXT report (human-readable)
+- Creates CSV report (machine-readable for TouchDesigner)
+- Shows today vs lifetime statistics
+- Calculates WPM, CPM, work periods, breaks
+- Analyzes time per application
+- Saved to `activity_data/reports/`
 
 **FOLDER** - Opens the `activity_data` folder in Finder
 
@@ -311,9 +331,9 @@ All sessions are saved as CSV files in the `activity_data/` folder:
 
 ```
 activity_data/
-  ├── session_20251023_143500.csv
-  ├── session_20251023_150200.csv
-  └── session_20251023_152700.csv
+  â”œâ”€â”€ session_20251023_143500.csv
+  â”œâ”€â”€ session_20251023_150200.csv
+  â””â”€â”€ session_20251023_152700.csv
 ```
 
 Each CSV file contains:
@@ -334,8 +354,8 @@ Activity Tracker Started
 ========================================
 Tracking started... Session ID: 20251023_143500
 Creating listeners for the first time...
-✓ Keyboard listener started
-✓ Mouse listener started
+âœ“ Keyboard listener started
+âœ“ Mouse listener started
 [Chrome] keystroke: h
 [Chrome] keystroke: e
 [Chrome] keystroke: l
@@ -366,9 +386,9 @@ Files are named with session start time:
 
 ```
 session_YYYYMMDD_HHMMSS.csv
-        │       │
-        │       └─ Hour, minute, second
-        └───────── Year, month, day
+        â”‚       â”‚
+        â”‚       â””â”€ Hour, minute, second
+        â””â”€â”€â”€â”€â”€â”€â”€â”€â”€ Year, month, day
 ```
 
 ### File Size
@@ -387,10 +407,12 @@ CSV format is 50% smaller than JSON!
 ## Use Cases
 
 ### Analytics + Productivity
+- Generate comprehensive summary reports (TXT + CSV)
 - Track your daily computer usage patterns
-- Measure typing speed and activity levels
-- Measure time spent in different applications / see which apps you use most
-- Track breaks and active periods / find your most productive hours
+- Measure typing speed (WPM) and clicking rate (CPM)
+- Analyze time spent per application
+- Monitor work periods and break patterns
+- Export data to TouchDesigner or other tools
 
 ### Data Analysis Projects
 - Import CSVs into Excel, Python, R
@@ -504,21 +526,21 @@ pip3.11 install pynput pillow --break-system-packages
 
 ### What Gets Recorded
 
-✅ **YES** - Key presses (which key)
+âœ… **YES** - Key presses (which key)
 
-✅ **YES** - Mouse clicks (which button)
+âœ… **YES** - Mouse clicks (which button)
 
-✅ **YES** - Application names
+âœ… **YES** - Application names
 
-✅ **YES** - Timestamps
+âœ… **YES** - Timestamps
 
-❌ **NO** - Screenshots or screen content
+âŒ **NO** - Screenshots or screen content
 
-❌ **NO** - Cursor positions
+âŒ **NO** - Cursor positions
 
-❌ **NO** - Window titles or URLs
+âŒ **NO** - Window titles or URLs
 
-❌ **NO** - File paths or documents
+âŒ **NO** - File paths or documents
 
 ### Data Storage
 
@@ -548,26 +570,26 @@ It does **NOT** require:
 ### Architecture
 
 ```
-┌─────────────────────────────────────┐
-│  GUI (Tkinter)                      │
-│  - Display window                   │
-│  - Update stats                     │
-│  - Control buttons                  │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│  ActivityTracker                    │
-│  - Record events                    │
-│  - Manage sessions                  │
-│  - Save to CSV                      │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│  Listeners (pynput)                 │
-│  - Keyboard monitoring              │
-│  - Mouse monitoring                 │
-│  - Run continuously                 │
-└─────────────────────────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚  GUI (Tkinter)                      â”‚
+â”‚  - Display window                   â”‚
+â”‚  - Update stats                     â”‚
+â”‚  - Control buttons                  â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+               â”‚
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚  ActivityTracker                    â”‚
+â”‚  - Record events                    â”‚
+â”‚  - Manage sessions                  â”‚
+â”‚  - Save to CSV                      â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+               â”‚
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚  Listeners (pynput)                 â”‚
+â”‚  - Keyboard monitoring              â”‚
+â”‚  - Mouse monitoring                 â”‚
+â”‚  - Run continuously                 â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 ### Threading Model
@@ -693,13 +715,13 @@ from AppKit import NSWorkspace  # Get active app name (macOS)
 
 **UI Components:**
 ```
-┌─────────────────────┐
-│    TRACKING         │  ← Status label
-│                     │
-│ [STOP] [APP] [FOLDER] │  ← Control buttons
-│                     │
-│  2m 30s | 145 events │  ← Stats label
-└─────────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚    TRACKING         â”‚  â† Status label
+â”‚                     â”‚
+â”‚ [STOP] [APP] [FOLDER] â”‚  â† Control buttons
+â”‚                     â”‚
+â”‚  2m 30s | 145 events â”‚  â† Stats label
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 **Button Functions:**
