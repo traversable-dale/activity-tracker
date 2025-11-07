@@ -455,7 +455,7 @@ class ActivitySummary:
         return filtered_periods
     
     def count_words(self, events):
-        """Count words by finding keystroke sequences ending in space"""
+        """Count words by finding keystroke sequences ending in space, period, enter, or tab"""
         word_count = 0
         current_chars = []
         
@@ -466,7 +466,7 @@ class ActivitySummary:
                     if current_chars:  # We completed a word
                         word_count += 1
                         current_chars = []
-                elif key in ['enter', 'tab', 'return']:
+                elif key in ['enter', 'tab', 'return', '.', 'period']:
                     if current_chars:  # End of word
                         word_count += 1
                         current_chars = []
@@ -482,12 +482,38 @@ class ActivitySummary:
         return word_count
     
     def filter_events_by_date(self, events, target_date):
-        """Filter events that occurred on a specific date"""
+        """Filter events that occurred on a specific date OR are part of a session that started on that date"""
         filtered = []
-        for event in events:
+        session_starts = {}  # Track which session started on which date
+        
+        # Group events by session (consecutive events are same session)
+        # A session is identified by gaps < break_threshold
+        current_session_start = None
+        
+        for i, event in enumerate(events):
             timestamp = self.parse_timestamp(event['timestamp'])
-            if timestamp and timestamp.date() == target_date:
+            if not timestamp:
+                continue
+            
+            # Check if this starts a new session (big gap from previous)
+            if i > 0:
+                prev_timestamp = self.parse_timestamp(events[i-1]['timestamp'])
+                if prev_timestamp:
+                    gap = (timestamp - prev_timestamp).total_seconds()
+                    if gap > self.break_threshold:
+                        # New session starting
+                        current_session_start = timestamp.date()
+            
+            # First event starts first session
+            if current_session_start is None:
+                current_session_start = timestamp.date()
+            
+            # Include event if:
+            # 1. Event date matches target, OR
+            # 2. Session started on target date (even if event is next day)
+            if timestamp.date() == target_date or current_session_start == target_date:
                 filtered.append(event)
+        
         return filtered
     
     def analyze_events(self, events, label="Summary"):
@@ -498,7 +524,18 @@ class ActivitySummary:
         # Detect periods
         periods = self.detect_periods(events)
         work_periods = [p for p in periods if p['type'] == 'work']
-        break_periods = [p for p in periods if p['type'] == 'break']
+        all_break_periods = [p for p in periods if p['type'] == 'break']
+        
+        # Separate short breaks (<30 min) from stepped away (>=30 min)
+        short_breaks = []
+        stepped_away = []
+        for p in all_break_periods:
+            if p['end']:
+                duration_minutes = (p['end'] - p['start']).total_seconds() / 60
+                if duration_minutes < 30:
+                    short_breaks.append(p)
+                else:
+                    stepped_away.append(p)
         
         # Count events by type
         mouse_events = [e for e in events if e['event_type'] == 'click']
@@ -507,19 +544,25 @@ class ActivitySummary:
         # Calculate total time
         first_event = self.parse_timestamp(events[0]['timestamp'])
         last_event = self.parse_timestamp(events[-1]['timestamp'])
+        total_duration = (last_event - first_event).total_seconds()
         
         # Calculate working time
         work_time = sum([(p['end'] - p['start']).total_seconds() 
                         for p in work_periods if p['end']])
         
-        # Calculate break time
+        # Calculate break time (only short breaks, not stepped away)
         break_time = sum([(p['end'] - p['start']).total_seconds() 
-                         for p in break_periods if p['end']])
+                         for p in short_breaks if p['end']])
+        
+        # Calculate stepped away time
+        stepped_away_time = sum([(p['end'] - p['start']).total_seconds() 
+                                 for p in stepped_away if p['end']])
         
         # Calculate averages
         avg_period_length = work_time / len(work_periods) if work_periods else 0
         avg_period_events = sum([len(p['events']) for p in work_periods]) / len(work_periods) if work_periods else 0
-        avg_break_length = break_time / len(break_periods) if break_periods else 0
+        avg_break_length = break_time / len(short_breaks) if short_breaks else 0
+        avg_stepped_away_length = stepped_away_time / len(stepped_away) if stepped_away else 0
         
         # Count words and calculate WPM
         word_count = self.count_words(events)
@@ -582,11 +625,15 @@ class ActivitySummary:
             'avg_period_length': avg_period_length,
             'avg_period_events': avg_period_events,
             'break_time_seconds': break_time,
-            'num_breaks': len(break_periods),
+            'num_breaks': len(short_breaks),
             'avg_break_length': avg_break_length,
+            'stepped_away_time_seconds': stepped_away_time,
+            'num_stepped_away': len(stepped_away),
+            'avg_stepped_away_length': avg_stepped_away_length,
             'program_stats': dict(program_stats),
             'first_event': first_event,
-            'last_event': last_event
+            'last_event': last_event,
+            'total_duration_seconds': total_duration
         }
     
     def format_time(self, seconds):
@@ -649,23 +696,24 @@ class ActivitySummary:
             # This shows all gaps including ones at end of sessions
             raw_periods = self.detect_periods_raw(today_events)
             lines.extend(self.generate_timeline(raw_periods, "Today"))
+            
+            # Today's program table
+            lines.append("\n📋 TODAY - PROGRAM USAGE TABLE")
+            lines.append("-" * 60)
+            lines.extend(self.format_program_table(today_stats['program_stats']))
         else:
             lines.append("\n📅 TODAY'S SUMMARY")
             lines.append("-" * 60)
             lines.append("No activity recorded today.")
         
         # Analyze lifetime
-        lines.append("\n📊 LIFETIME SUMMARY")
-        lines.append("-" * 60)
+        lines.append("\n\n" + "=" * 60)
+        lines.append("📊 LIFETIME SUMMARY")
+        lines.append("=" * 60)
         lifetime_stats = self.analyze_events(all_events, "Lifetime")
         lines.extend(self.format_stats(lifetime_stats))
         
-        # Print program comparison table
-        if today_events:
-            lines.append("\n📋 TODAY - PROGRAM USAGE TABLE")
-            lines.append("-" * 60)
-            lines.extend(self.format_program_table(today_stats['program_stats']))
-        
+        # Lifetime program table
         lines.append("\n📋 LIFETIME - PROGRAM USAGE TABLE")
         lines.append("-" * 60)
         lines.extend(self.format_program_table(lifetime_stats['program_stats']))
@@ -714,21 +762,20 @@ class ActivitySummary:
         # Add session start
         lines.append(f"{session_start.strftime('%I:%M %p').lstrip('0'):<15} | Session Started")
         
-        # Process each period - show state changes
+        # Process each period - show state changes and durations
         for i, period in enumerate(periods):
             if not period['start'] or not period['end']:
                 continue
             
             start_time = period['start'].strftime('%I:%M %p').lstrip('0')
+            duration = (period['end'] - period['start']).total_seconds() / 60
             
             if period['type'] == 'work':
-                # Show when working starts
-                lines.append(f"{start_time:<15} | Working")
+                # Show when working starts with duration
+                lines.append(f"{start_time:<15} | Working ({int(duration)} min)")
             
             elif period['type'] == 'break':
-                # Calculate break duration
-                duration = (period['end'] - period['start']).total_seconds() / 60
-                
+                # Separate breaks (<30 min) from stepped away (>=30 min)
                 if duration >= 30:
                     lines.append(f"{start_time:<15} | Stepped Away ({int(duration)} min)")
                 else:
@@ -752,6 +799,9 @@ class ActivitySummary:
         
         # Today's metrics
         if today_stats:
+            add_metric('session_duration_seconds', 'today', round(today_stats['total_duration_seconds'], 2), 'seconds')
+            add_metric('session_duration_minutes', 'today', round(today_stats['total_duration_seconds'] / 60, 2), 'minutes')
+            add_metric('session_duration_hours', 'today', round(today_stats['total_duration_seconds'] / 3600, 2), 'hours')
             add_metric('total_events', 'today', today_stats['total_events'], 'count')
             add_metric('mouse_events', 'today', today_stats['mouse_events'], 'count')
             add_metric('keyboard_events', 'today', today_stats['keyboard_events'], 'count')
@@ -770,6 +820,11 @@ class ActivitySummary:
             add_metric('num_breaks', 'today', today_stats['num_breaks'], 'count')
             add_metric('avg_break_length_seconds', 'today', round(today_stats['avg_break_length'], 2), 'seconds')
             add_metric('avg_break_length_minutes', 'today', round(today_stats['avg_break_length'] / 60, 2), 'minutes')
+            add_metric('stepped_away_time_seconds', 'today', round(today_stats['stepped_away_time_seconds'], 2), 'seconds')
+            add_metric('stepped_away_time_minutes', 'today', round(today_stats['stepped_away_time_seconds'] / 60, 2), 'minutes')
+            add_metric('num_stepped_away', 'today', today_stats['num_stepped_away'], 'count')
+            add_metric('avg_stepped_away_length_seconds', 'today', round(today_stats['avg_stepped_away_length'], 2), 'seconds')
+            add_metric('avg_stepped_away_length_minutes', 'today', round(today_stats['avg_stepped_away_length'] / 60, 2), 'minutes')
             
             # Today's program stats
             for program, stats in today_stats['program_stats'].items():
@@ -780,6 +835,9 @@ class ActivitySummary:
                 add_metric(f'program_{program}_total', 'today_programs', stats['total'], 'count')
         
         # Lifetime metrics
+        add_metric('session_duration_seconds', 'lifetime', round(lifetime_stats['total_duration_seconds'], 2), 'seconds')
+        add_metric('session_duration_minutes', 'lifetime', round(lifetime_stats['total_duration_seconds'] / 60, 2), 'minutes')
+        add_metric('session_duration_hours', 'lifetime', round(lifetime_stats['total_duration_seconds'] / 3600, 2), 'hours')
         add_metric('total_events', 'lifetime', lifetime_stats['total_events'], 'count')
         add_metric('mouse_events', 'lifetime', lifetime_stats['mouse_events'], 'count')
         add_metric('keyboard_events', 'lifetime', lifetime_stats['keyboard_events'], 'count')
@@ -798,6 +856,11 @@ class ActivitySummary:
         add_metric('num_breaks', 'lifetime', lifetime_stats['num_breaks'], 'count')
         add_metric('avg_break_length_seconds', 'lifetime', round(lifetime_stats['avg_break_length'], 2), 'seconds')
         add_metric('avg_break_length_minutes', 'lifetime', round(lifetime_stats['avg_break_length'] / 60, 2), 'minutes')
+        add_metric('stepped_away_time_seconds', 'lifetime', round(lifetime_stats['stepped_away_time_seconds'], 2), 'seconds')
+        add_metric('stepped_away_time_minutes', 'lifetime', round(lifetime_stats['stepped_away_time_seconds'] / 60, 2), 'minutes')
+        add_metric('num_stepped_away', 'lifetime', lifetime_stats['num_stepped_away'], 'count')
+        add_metric('avg_stepped_away_length_seconds', 'lifetime', round(lifetime_stats['avg_stepped_away_length'], 2), 'seconds')
+        add_metric('avg_stepped_away_length_minutes', 'lifetime', round(lifetime_stats['avg_stepped_away_length'] / 60, 2), 'minutes')
         
         # Lifetime program stats
         for program, stats in lifetime_stats['program_stats'].items():
@@ -831,11 +894,17 @@ class ActivitySummary:
             return []
         
         lines = []
-        lines.append(f"\nTotal Events: {stats['total_events']:,}")
+        
+        # Session duration info at top
+        lines.append(f"\n📅 Session Duration: {self.format_time(stats['total_duration_seconds'])}")
+        lines.append(f"  └─ Started: {stats['first_event'].strftime('%I:%M %p').lstrip('0')}")
+        lines.append(f"  └─ Ended: {stats['last_event'].strftime('%I:%M %p').lstrip('0')}")
+        
+        lines.append(f"\n📊 Total Events: {stats['total_events']:,}")
         lines.append(f"  └─ Mouse: {stats['mouse_events']:,}")
         lines.append(f"  └─ Keyboard: {stats['keyboard_events']:,}")
-        lines.append(f"\nWords per Minute: {stats['wpm']:.1f}")
-        lines.append(f"Clicks per Minute: {stats['cpm']:.1f}")
+        lines.append(f"\n⚡ Words per Minute: {stats['wpm']:.1f}")
+        lines.append(f"⚡ Clicks per Minute: {stats['cpm']:.1f}")
         
         lines.append(f"\n⏱️  Time Working: {self.format_time(stats['work_time_seconds'])}")
         lines.append(f"  └─ Working Periods: {stats['work_periods']}")
@@ -846,6 +915,12 @@ class ActivitySummary:
         lines.append(f"  └─ Number of Breaks: {stats['num_breaks']}")
         if stats['num_breaks'] > 0:
             lines.append(f"  └─ Avg Break Length: {self.format_time(stats['avg_break_length'])}")
+        
+        # Add stepped away section
+        if stats['num_stepped_away'] > 0:
+            lines.append(f"\n🚶 Time Stepped Away: {self.format_time(stats['stepped_away_time_seconds'])}")
+            lines.append(f"  └─ Times Stepped Away: {stats['num_stepped_away']}")
+            lines.append(f"  └─ Avg Duration: {self.format_time(stats['avg_stepped_away_length'])}")
         
         return lines
     
