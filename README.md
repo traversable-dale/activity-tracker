@@ -21,6 +21,22 @@ All data is saved locally to CSV files that you can analyze later.
 
 ---
 
+## Quick commands
+
+Build the app:
+```
+python3.11 setup.py py2app
+```
+
+Run the python with terminal monitor:
+``` 
+python3.11 activity_tracker.py
+```
+
+
+--
+
+
 ## Key Features
 
 ### **Simple & Minimal**
