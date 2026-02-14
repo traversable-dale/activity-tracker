@@ -1,8 +1,10 @@
 # Activity Tracker
 
+**Version 0.2.0** | Updated February 14, 2026
+
 A lightweight, cross-platform desktop application that monitors your keyboard and mouse activity in real-time.
 
-Track every keystroke and click, see which applications you use most, and analyze your computer usage patterns over time.
+Track your clicks and keystrokes, see which applications you use most, and analyze your computer usage patterns over time.
 
 ---
 
@@ -43,9 +45,8 @@ python3.11 activity_tracker.py
 - Clean black and white interface
 - Compact 320x120 window
 - Clock + Event counter
-- Four buttons: 
-  - STOP/START | activate / de-activated tracking
-  - APP/GLOBAL | switch between app-specific / global tracking
+- Three buttons: 
+  - PAUSE/RESUME | temporarily stop/resume recording
   - SUMMARY | generate analytics report
   - FOLDER | open folder containing saved data
 
@@ -82,7 +83,7 @@ python3.11 activity_tracker.py
 ### Requirements
 
 - **macOS** (Windows/Linux compatible with minor tweaks)
-- **Python 3.11** ⚠️ **Important: Must use 3.11, NOT 3.14!**
+- **Python 3.11** ** **Important: Must use 3.11, NOT 3.14!**
 - **Homebrew** (for macOS dependencies)
 
 ### Step 1: Install Python 3.11
@@ -117,14 +118,14 @@ Save `activity_tracker.py` to a folder on your computer.
 The app needs permission to monitor keyboard and mouse:
 
 1. Run the app once: `python3.11 activity_tracker.py`
-2. Go to **System Preferences** → **Security & Privacy** → **Privacy**
+2. Go to **System Preferences** -> **Security & Privacy** -> **Privacy**
 3. Select **Accessibility** from the left sidebar
-4. Click the lock 🔒 and enter your password
+4. Click the lock  and enter your password
 5. Click **+** and add Python 3.11:
    - Press **Cmd + Shift + G**
    - Paste: `/opt/homebrew/Cellar/python@3.11/3.11.14/Frameworks/Python.framework/Versions/3.11/Resources/Python.app`
    - Click **Open**
-6. Check the box ✓ next to Python
+6. Check the box (check) next to Python
 7. Do the same for **Input Monitoring**
 8. Restart the app
 
@@ -185,7 +186,7 @@ open dist/
 
 1. Open **Finder** and go to **Applications**
 2. Find **Activity Tracker.app**
-3. **Right-click** (or Ctrl+click) and select **Open**
+- Right-click -> Open instead of double-clicking
 4. Click **Open** in the security dialog (first launch only)
 
 macOS will ask for accessibility permissions just like running from Terminal. Follow the permission steps from the Installation section above.
@@ -238,7 +239,7 @@ mv dist/Activity\ Tracker.app /Applications/
 
 **"Activity Tracker.app" is damaged and can't be opened**
 - This happens when macOS can't verify the app
-- Right-click → Open instead of double-clicking
+- Right-click -> Open instead of double-clicking
 - Or run: `xattr -cr /Applications/Activity\ Tracker.app`
 
 **App doesn't start / crashes immediately**
@@ -279,20 +280,16 @@ The app will:
 ### The Interface
 
 ```
-┌──────────────────────────────────────┐
-│           TRACKING                   │
-│                                      │
-│  [STOP] [APP] [SUMMARY] [FOLDER]    │
-│                                      │
-│       2m 30s | 145 events            │
-└──────────────────────────────────────┘
++--------------------------------------+
+|           TRACKING                   |
+|                                      |
+|  [PAUSE]  [SUMMARY]  [FOLDER]       |
+|                                      |
+|       2m 30s | 145 events            |
++--------------------------------------+
 ```
 
-**STOP/START** - Toggle tracking on/off
-
-**APP/GLOBAL** - Switch modes:
-- **APP mode**: Track which application each event belongs to
-- **GLOBAL mode**: Track all events without app names
+**PAUSE/RESUME** - Temporarily pause/resume event recording (e.g. for typing passwords)
 
 **SUMMARY** - Generate analytics report:
 - Creates TXT report (human-readable)
@@ -312,9 +309,11 @@ All sessions are saved as CSV files in the `activity_data/` folder:
 
 ```
 activity_data/
-  ├── session_20251023_143500.csv
-  ├── session_20251023_150200.csv
-  └── session_20251023_152700.csv
+  session_20251023_143500.csv
+  session_20251023_150200.csv
+  session_20251023_152700.csv
+  session_20251023_150200.csv
+  session_20251023_152700.csv
 ```
 
 Each CSV file contains:
@@ -335,8 +334,8 @@ Activity Tracker Started
 ========================================
 Tracking started... Session ID: 20251023_143500
 Creating listeners for the first time...
-✓ Keyboard listener started
-✓ Mouse listener started
+(check) Keyboard listener started
+(check) Mouse listener started
 [Chrome] keystroke: h
 [Chrome] keystroke: e
 [Chrome] keystroke: l
@@ -367,9 +366,9 @@ Files are named with session start time:
 
 ```
 session_YYYYMMDD_HHMMSS.csv
-        │       │
-        │       └─ Hour, minute, second
-        └───────── Year, month, day
+        |       |
+        |       +-- Hour, minute, second
+        +---------- Year, month, day
 ```
 
 ### File Size
@@ -505,21 +504,23 @@ pip3.11 install pynput pillow --break-system-packages
 
 ### What Gets Recorded
 
-✅ **YES** - Key presses (which key)
+**YES** - Key presses (categorized as char/separator/modifier — no raw key values recorded)
 
-✅ **YES** - Mouse clicks (which button)
+**YES** - Mouse clicks (which button)
 
-✅ **YES** - Application names
+**YES** - Application names
 
-✅ **YES** - Timestamps
+**YES** - Timestamps
 
-❌ **NO** - Screenshots or screen content
+**NO** - Screenshots or screen content
 
-❌ **NO** - Cursor positions
+**NO** - Cursor positions
 
-❌ **NO** - Window titles or URLs
+**NO** - Window titles or URLs
 
-❌ **NO** - File paths or documents
+**NO** - File paths or documents
+
+**NO** - Individual key values (what you typed is never recorded)
 
 ### Data Storage
 
@@ -549,26 +550,26 @@ It does **NOT** require:
 ### Architecture
 
 ```
-┌─────────────────────────────────────┐
-│  GUI (Tkinter)                      │
-│  - Display window                   │
-│  - Update stats                     │
-│  - Control buttons                  │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│  ActivityTracker                    │
-│  - Record events                    │
-│  - Manage sessions                  │
-│  - Save to CSV                      │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│  Listeners (pynput)                 │
-│  - Keyboard monitoring              │
-│  - Mouse monitoring                 │
-│  - Run continuously                 │
-└─────────────────────────────────────┘
++--------------------------------------+
+|  GUI (Tkinter)                       |
+|  - Display window                    |
+|  - Update stats                      |
+|  - Control buttons                   |
++------------------+-------------------+
+                   |
++------------------v-------------------+
+|  ActivityTracker                     |
+|  - Record events                     |
+|  - Manage sessions                   |
+|  - Save to CSV                       |
++------------------+-------------------+
+                   |
++------------------v-------------------+
+|  Listeners (pynput)                  |
+|  - Keyboard monitoring               |
+|  - Mouse monitoring                  |
+|  - Run continuously                  |
++--------------------------------------+
 ```
 
 ### Threading Model
@@ -578,7 +579,7 @@ It does **NOT** require:
 - **Mouse Thread**: Monitors mouse (runs continuously)
 - **Tracking Thread**: Starts/stops recording (not listeners)
 
-**Important:** Listeners run continuously. Stop/Start only controls whether events are recorded, not whether listeners are active.
+**Important:** The app is designed to run continuously. Listeners run at all times. The PAUSE button temporarily stops event recording (for privacy), but listeners stay active so tracking resumes instantly.
 
 ### Performance
 
@@ -600,7 +601,7 @@ It does **NOT** require:
 
 **Q: Does this track passwords?**
 
-A: No. But also YES. This program will monitor your keyboard input, which means that your passwords / login information will be recorded (one keystroke at a time). It is up to the user to decide what happens with the recorded data. If you are tracking activity and need to type a sensistive string, you can always STOP tracking temporarily. The program itself does not recognize words or phrases- only keystrokes.
+A: No. As of v0.2.0, individual key values are never recorded. The app only logs whether a key press was a character, separator (space/enter/tab), or modifier (shift/ctrl/etc). Your passwords, messages, and other typed content cannot be reconstructed from the data. You can also use the PAUSE button to temporarily stop all recording.
 
 **Q: Why must I use Python 3.11?**
 
