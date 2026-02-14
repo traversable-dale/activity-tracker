@@ -1,11 +1,21 @@
 # Activity Tracker
-### Cross-Platform Activity Monitor
 
-**Version 0.2.0** | Updated February 14, 2026
+**Version 0.2.0** | Cross-Platform Activity Monitor
 
 A lightweight desktop app that tracks keyboard and mouse activity by application. Analyze your computer usage patterns with detailed reports.
 
 ![ref app](ref/ref-GUI.png)
+
+---
+
+## Deployment Options
+
+| Method | Platform | Best For | Installation |
+|--------|----------|----------|--------------|
+| **Python Script** | macOS/Windows | Development, integration | `pip install` + `python activity_tracker.py` |
+| **macOS .app** | macOS only | Mac users, no terminal | `py2app` build → double-click |
+| **Windows .exe** | Windows only | Quick distribution | `pyinstaller` build → double-click |
+| **Windows Installer** | Windows only | Professional deployment | Inno Setup wizard install |
 
 ---
 
@@ -17,9 +27,7 @@ A lightweight desktop app that tracks keyboard and mouse activity by application
 # Install Python 3.11 and dependencies
 brew install python@3.11 python-tk@3.11
 pip3.11 install pynput pillow --break-system-packages
-```
 
-```
 # Run the app
 python3.11 activity_tracker.py
 ```
@@ -31,35 +39,12 @@ python3.11 activity_tracker.py
 ```bash
 # Install dependencies
 pip install pynput pillow pywin32 psutil
-```
 
-```
 # Run the app
 python activity_tracker.py
 ```
 
 No special permissions needed!
-
----
-
-
-## Building Standalone App (macOS)
-
-```bash
-# Install py2app
-pip3.11 install py2app --break-system-packages
-
-# Build (alias mode - recommended)
-python3.11 setup.py py2app -A
-
-# Move to Applications
-mv dist/Activity\ Tracker.app /Applications/
-```
-
-**First launch:** Right-click → Open (to bypass security prompt)
-
----
-
 
 ---
 
@@ -117,6 +102,154 @@ Reports saved to `activity_data/reports/`:
 
 ---
 
+## Advanced Usage
+
+### Running from Python (for integration)
+
+You can import and control the tracker programmatically from other Python scripts:
+
+```python
+# Import the tracker
+from activity_tracker import ActivityTracker
+
+# Create tracker instance
+tracker = ActivityTracker(autosave_interval=30)
+
+# Start tracking
+tracker.start_tracking()
+
+# Later: pause temporarily
+tracker.pause_tracking()
+
+# Resume
+tracker.resume_tracking()
+
+# Stop and save
+tracker.stop_tracking()
+
+# Access data
+events = tracker.load_all_sessions()
+```
+
+**Use cases:**
+- Start/stop tracking from another Python app
+- Integrate with TouchDesigner using Python DATs
+- Build custom dashboards that control the tracker
+- Schedule tracking sessions programmatically
+
+### Command Line Options
+
+Run from terminal with custom settings:
+
+```bash
+# macOS
+python3.11 activity_tracker.py
+
+# Windows  
+python activity_tracker.py
+```
+
+**To run in background (no GUI):**
+Modify the script to skip `ActivityTrackerGUI()` and just run `ActivityTracker()` directly.
+
+---
+
+## Building Standalone Apps
+
+> **Windows Users:** See [WINDOWS_BUILD.md](WINDOWS_BUILD.md) for detailed Windows build instructions.
+
+---
+
+### macOS App Bundle
+
+Create a double-clickable `.app` that runs without Terminal:
+
+```bash
+# Install py2app
+pip3.11 install py2app --break-system-packages
+
+# Build (alias mode - recommended for development)
+python3.11 setup.py py2app -A
+
+# Or build full bundle (for distribution)
+python3.11 setup.py py2app
+
+# Move to Applications
+mv dist/Activity\ Tracker.app /Applications/
+```
+
+**First launch:** Right-click → Open (to bypass security prompt)
+
+**Note:** Alias mode (`-A`) creates a lightweight app that links to your source files - faster builds, instant updates when you edit code. Full bundle packages everything inside the app.
+
+---
+
+### Windows Executable
+
+Create a double-clickable `.exe` installer:
+
+#### Quick Build (Using Spec Files)
+
+```bash
+# Install PyInstaller
+pip install pyinstaller
+
+# Option 1: Single-file executable (easiest to share)
+pyinstaller ActivityTracker-onefile.spec
+
+# Option 2: Folder mode (faster startup)
+pyinstaller ActivityTracker.spec
+
+# The .exe will be in dist/ folder
+```
+
+#### Manual Build (Without Spec Files)
+
+```bash
+# Single-file executable
+pyinstaller --onefile --windowed --name "ActivityTracker" ^
+            --icon=ref/TDT-logo-white-circle.ico activity_tracker.py
+
+# Or folder mode
+pyinstaller --windowed --name "ActivityTracker" ^
+            --icon=ref/TDT-logo-white-circle.ico activity_tracker.py
+```
+
+---
+
+---
+
+## Professional Installer with GUI Wizard
+
+For a full installation experience like commercial software:
+
+1. **Build the .exe** first using PyInstaller (folder mode recommended)
+   ```bash
+   pyinstaller ActivityTracker.spec
+   ```
+
+2. **Download Inno Setup** (free): https://jrsoftware.org/isinfo.php
+
+3. **Open `installer-setup.iss`** in Inno Setup
+
+4. **Click "Compile"** - creates `Activity_Tracker_Setup.exe` in `Output/` folder
+
+5. **Distribute** the setup file - users get a professional install wizard!
+
+**The installer provides:**
+- Installation wizard with progress bar
+- Desktop shortcut option
+- Start menu entry
+- Proper uninstaller
+- Professional look and feel
+
+**Note:** 
+- `--onefile` = single `.exe` (slower startup, easier to share)
+- Folder mode = faster startup, better for installer distribution
+- Spec files include the background image automatically
+
+---
+---
 
 ## Privacy & Security
 

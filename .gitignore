@@ -8,3 +8,5 @@ activity_data/*
 TD
 TD/
 dist/
+Output/
+build/
