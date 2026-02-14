@@ -17,7 +17,9 @@ A lightweight desktop app that tracks keyboard and mouse activity by application
 # Install Python 3.11 and dependencies
 brew install python@3.11 python-tk@3.11
 pip3.11 install pynput pillow --break-system-packages
+```
 
+```
 # Run the app
 python3.11 activity_tracker.py
 ```
@@ -29,12 +31,35 @@ python3.11 activity_tracker.py
 ```bash
 # Install dependencies
 pip install pynput pillow pywin32 psutil
+```
 
+```
 # Run the app
 python activity_tracker.py
 ```
 
 No special permissions needed!
+
+---
+
+
+## Building Standalone App (macOS)
+
+```bash
+# Install py2app
+pip3.11 install py2app --break-system-packages
+
+# Build (alias mode - recommended)
+python3.11 setup.py py2app -A
+
+# Move to Applications
+mv dist/Activity\ Tracker.app /Applications/
+```
+
+**First launch:** Right-click → Open (to bypass security prompt)
+
+---
+
 
 ---
 
@@ -92,22 +117,6 @@ Reports saved to `activity_data/reports/`:
 
 ---
 
-## Building Standalone App (macOS)
-
-```bash
-# Install py2app
-pip3.11 install py2app --break-system-packages
-
-# Build (alias mode - recommended)
-python3.11 setup.py py2app -A
-
-# Move to Applications
-mv dist/Activity\ Tracker.app /Applications/
-```
-
-**First launch:** Right-click → Open (to bypass security prompt)
-
----
 
 ## Privacy & Security
 
@@ -188,9 +197,21 @@ pip install pynput pillow pywin32 psutil
 
 ---
 
-## Credits
+# Credits & Terms
 
-Built by Claude & Traversable Dale (2025)
+>#### TERMS OF TEMPORAL INTERACTION:
+>##### Your engagement with this codebase constitutes acceptance of the following metaphysical obligations: 
+>###### (1) Each click and keystroke is an invocation of causality itself; (2) Tracking constitutes witnessing, and witnessing constitutes participation in the inexorable forward march of entropy; (3) User acknowledges that time spent debugging is time that can never be recovered and has significant ontological implications; (4) By scrolling, User enters the river of becoming and cannot step in the same code twice.
+
+
+ ###### **Copyright:** good luck.
+
+
+ ###### Built by Claude & Traversable Dale
+
+###### Traversable Dale Technologies (2025)
+
+---
 
 **License:** Free for personal and educational use
 
