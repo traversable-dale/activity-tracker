@@ -6,16 +6,63 @@ Dependencies:
 pip install pynput pillow
 """
 
+APP_VERSION = "0.2.0"
+
 import tkinter as tk
 from tkinter import ttk
 from datetime import datetime
 import threading
 import csv
 import os
+import logging
+from logging.handlers import RotatingFileHandler
 from collections import defaultdict
 import glob
 import subprocess
+import platform
 from PIL import Image, ImageTk
+
+
+# ============ DEBUG LOGGING SETUP ============
+# Log file: activity_data/debug.log (auto-rotates at 2MB, keeps 3 backups)
+# Set to logging.INFO for quieter logs
+
+DEBUG_LOG_LEVEL = logging.DEBUG
+
+def setup_logger():
+    """Configure rotating file logger for debug output"""
+    logger = logging.getLogger('activity_tracker')
+    logger.setLevel(DEBUG_LOG_LEVEL)
+    if logger.handlers:
+        return logger
+    
+    # Use script directory for log location
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    log_dir = os.path.join(script_dir, 'activity_data')
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    
+    log_path = os.path.join(log_dir, 'debug.log')
+    
+    file_handler = RotatingFileHandler(
+        log_path, maxBytes=2*1024*1024, backupCount=3, encoding='utf-8'
+    )
+    file_handler.setLevel(DEBUG_LOG_LEVEL)
+    formatter = logging.Formatter(
+        '%(asctime)s | %(levelname)-7s | %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    
+    # Log the resolved path so we can debug path issues
+    logger.info(f"Debug log initialized at: {log_path}")
+    
+    return logger
+
+log = setup_logger()
+
+# =============================================
 
 # Fix for pynput on newer macOS/Python versions
 try:
@@ -33,11 +80,10 @@ try:
     from pynput import keyboard, mouse
     PYNPUT_AVAILABLE = True
 except ImportError as e:
-    print(f"Warning: Could not import pynput or required libraries: {e}")
+    log.warning(f"Could not import pynput or required libraries: {e}")
     PYNPUT_AVAILABLE = False
 
 # Platform-specific imports
-import platform
 if platform.system() == 'Darwin':  # macOS
     from AppKit import NSWorkspace
 elif platform.system() == 'Windows':
@@ -56,15 +102,14 @@ BG_COLOR = "#FFFFFF"  # Background color (used when no image)
 BG_IMAGE_PATH = "assets/bg/background.png"  # Optional background image
 
 # Button colors
-BUTTON_STOP_BG = "#9C2D2D"  
-BUTTON_START_BG = "#2D9C64"  
-BUTTON_MODE_BG = "#9C642D"  
+BUTTON_PAUSE_BG = "#9C2D2D"    # Pause button (red-ish)
+BUTTON_RESUME_BG = "#2D9C64"   # Resume button (green-ish) 
 BUTTON_FOLDER_BG = "#2D649C"  
 BUTTON_TEXT_COLOR = "#123456"  # Button text color
 
 # Text colors
 STATUS_TRACKING_COLOR = "#FFFFFF"  # "TRACKING" text color
-STATUS_STOPPED_COLOR = "#FFFFFF"   # "STOPPED" text color  
+STATUS_PAUSED_COLOR = "#FFFFFF"    # "PAUSED" text color  
 STATS_TEXT_COLOR = "#FFFFFF"       # Stats text color (time & events)
 
 # Font settings
@@ -78,20 +123,31 @@ FONT_SIZE_BUTTON = 9
 class ActivityTracker:
     """Main class for tracking keyboard and mouse activity"""
     
-    def __init__(self, autosave_interval=60):  # Changed to 60 seconds (1 minute)
+    # Keystroke categories for privacy-safe logging
+    SEPARATOR_KEYS = {'space', 'enter', 'tab', 'return'}
+    MODIFIER_KEYS = {'shift', 'shift_r', 'ctrl', 'ctrl_r', 'alt', 'alt_r', 
+                     'cmd', 'cmd_r', 'caps_lock', 'backspace', 'delete',
+                     'up', 'down', 'left', 'right', 'esc', 'home', 'end',
+                     'page_up', 'page_down', 'f1', 'f2', 'f3', 'f4', 'f5',
+                     'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12'}
+    
+    def __init__(self, autosave_interval=60):
         self.tracking = False
-        self.global_mode = False  # False = app-specific, True = global
+        self.paused = False  # For temporary pause (e.g. typing passwords)
         
         # Use script directory, not current working directory
         script_dir = os.path.dirname(os.path.abspath(__file__))
         self.data_folder = os.path.join(script_dir, 'activity_data')
         
-        self.autosave_interval = autosave_interval  # seconds between auto-saves
+        self.autosave_interval = autosave_interval
         self.last_save_time = datetime.now()
         
         # Create data folder if it doesn't exist
         if not os.path.exists(self.data_folder):
             os.makedirs(self.data_folder)
+        
+        log.info(f"ActivityTracker initialized — data folder: {self.data_folder}")
+        log.info(f"  Autosave interval: {autosave_interval}s")
         
         # Current session data
         self.session_id = None
@@ -112,9 +168,6 @@ class ActivityTracker:
     
     def get_active_application(self):
         """Get the currently active application name"""
-        if self.global_mode:
-            return "Global"
-        
         try:
             if platform.system() == 'Darwin':  # macOS
                 workspace = NSWorkspace.sharedWorkspace()
@@ -141,8 +194,8 @@ class ActivityTracker:
             return "Unknown"
     
     def record_event(self, event_type, key=None):
-        """Record an activity event"""
-        if not self.tracking:
+        """Record an activity event with privacy-safe keystroke categories"""
+        if not self.tracking or self.paused:
             return
         
         event = {
@@ -154,27 +207,33 @@ class ActivityTracker:
         self.session_events.append(event)
         self.event_count += 1
         
-        # Print every event to terminal for feedback
-        print(f"[{event['app']}] {event_type}: {key if key else 'N/A'}")
+        # Log sampled events (every 50th + all clicks) to avoid noise
+        if event_type == 'click' or self.event_count % 50 == 0:
+            log.debug(f"Event #{self.event_count} [{event['app']}] {event_type}: {key if key else 'N/A'}")
         
         # Auto-save if interval has passed
         if (datetime.now() - self.last_save_time).total_seconds() >= self.autosave_interval:
             self.save_session()
             self.last_save_time = datetime.now()
-            print(f">>> Auto-saved: {len(self.session_events)} events | File: {self.session_file} <<<")
+            log.info(f"Auto-saved: {len(self.session_events)} events | File: {self.session_file}")
     
     def on_key_press(self, key):
-        """Callback for keyboard events"""
+        """Callback for keyboard events — categorizes keystrokes for privacy"""
         try:
-            # Convert key to string representation
+            # Determine the raw key name
             if hasattr(key, 'char') and key.char is not None:
-                key_str = key.char
+                key_name = key.char
             else:
-                key_str = str(key).replace('Key.', '')
+                key_name = str(key).replace('Key.', '')
             
-            self.record_event('keystroke', key_str)
+            # Categorize the keystroke instead of storing the raw value
+            if key_name in self.SEPARATOR_KEYS:
+                self.record_event('keystroke', 'separator')
+            elif key_name in self.MODIFIER_KEYS:
+                self.record_event('keystroke', 'modifier')
+            else:
+                self.record_event('keystroke', 'char')
         except Exception as e:
-            # Silently ignore errors to prevent spam
             pass
     
     def on_click(self, x, y, button, pressed):
@@ -185,61 +244,61 @@ class ActivityTracker:
     
     def start_tracking(self):
         """Start tracking (or restart with new session)"""
-        # Start new session
         self.event_count = 0
         self.session_start = datetime.now()
         self.session_id = datetime.now().strftime('%Y%m%d_%H%M%S')
         self.session_file = os.path.join(self.data_folder, f'session_{self.session_id}.csv')
         self.session_events = []
         self.tracking = True
+        self.paused = False
         
-        print(f"Tracking started... Session ID: {self.session_id}")
+        log.info(f"Tracking started -- Session ID: {self.session_id}")
+        log.info(f"  Session file: {self.session_file}")
         
         # Only create listeners once on first start
         if not self.listeners_started and PYNPUT_AVAILABLE:
-            print("Creating listeners for the first time...")
+            log.info("Creating input listeners for the first time...")
             
-            # Start keyboard monitoring - ignore the trust error
             try:
-                # Create listener without checking trust status
                 self.keyboard_listener = keyboard.Listener(
                     on_press=self.on_key_press,
                     suppress=False
                 )
-                # Start in a thread so errors don't crash the app
                 keyboard_thread = threading.Thread(target=self.keyboard_listener.start, daemon=True)
                 keyboard_thread.start()
                 
-                # Give it a moment
                 import time
                 time.sleep(0.3)
-                print(f"âœ“ Keyboard listener started")
+                log.info("Keyboard listener started successfully")
             except Exception as e:
-                print(f"âœ— Keyboard listener error (may still work): {e}")
+                log.error(f"Keyboard listener error (may still work): {e}", exc_info=True)
             
-            # Start mouse monitoring
             try:
                 self.mouse_listener = mouse.Listener(on_click=self.on_click)
                 self.mouse_listener.start()
-                print(f"âœ“ Mouse listener started")
+                log.info("Mouse listener started successfully")
             except Exception as e:
-                print(f"âœ— Error starting mouse listener: {e}")
+                log.error(f"Error starting mouse listener: {e}", exc_info=True)
             
             self.listeners_started = True
         else:
-            print("Listeners already running, just starting new session")
+            log.debug("Listeners already running, starting new session")
     
     def stop_tracking(self):
         """Stop tracking (but keep listeners running)"""
         self.tracking = False
         self.save_session()
-        print(f"Tracking stopped. Saved {len(self.session_events)} events")
-        # Note: We DON'T stop the listeners - they keep running in the background
+        log.info(f"Tracking stopped. Saved {len(self.session_events)} events")
     
-    def toggle_mode(self):
-        """Toggle between app-specific and global tracking"""
-        self.global_mode = not self.global_mode
-        return self.global_mode
+    def pause_tracking(self):
+        """Temporarily pause recording (listeners stay active)"""
+        self.paused = True
+        log.info("Tracking paused")
+    
+    def resume_tracking(self):
+        """Resume recording after pause"""
+        self.paused = False
+        log.info("Tracking resumed")
     
     def save_session(self):
         """Save current session to CSV file"""
@@ -253,9 +312,7 @@ class ActivityTracker:
                 writer.writeheader()
                 writer.writerows(self.session_events)
         except Exception as e:
-            print(f"Error saving session: {e}")
-            import traceback
-            traceback.print_exc()
+            log.error(f"Error saving session: {e}", exc_info=True)
     
     def load_all_sessions(self):
         """Load all session files and return combined events"""
@@ -272,10 +329,10 @@ class ActivityTracker:
                         for row in reader:
                             all_events.append(row)
                 except Exception as e:
-                    print(f"Warning: Could not load {session_file}: {e}")
+                    log.warning(f"Could not load session file {session_file}: {e}")
                     continue
         except Exception as e:
-            print(f"Error loading sessions: {e}")
+            log.error(f"Error loading sessions: {e}", exc_info=True)
         
         return all_events
     
@@ -285,7 +342,7 @@ class ActivityTracker:
             session_files = glob.glob(os.path.join(self.data_folder, 'session_*.csv'))
             return len(session_files)
         except Exception as e:
-            print(f"Error counting sessions: {e}")
+            log.error(f"Error counting sessions: {e}")
             return 0
 
 
@@ -295,6 +352,7 @@ class ActivitySummary:
     def __init__(self, data_folder='activity_data'):
         self.data_folder = data_folder
         self.break_threshold = 300  # 5 minutes in seconds
+        self.session_timeout = 3600  # 1 hour — gaps longer than this = session ended
     
     def load_all_events(self):
         """Load all events from CSV files"""
@@ -308,7 +366,7 @@ class ActivitySummary:
                     for row in reader:
                         all_events.append(row)
             except Exception as e:
-                print(f"Warning: Could not load {session_file}: {e}")
+                log.warning(f"Could not load session file {session_file}: {e}")
         
         return all_events
     
@@ -320,16 +378,14 @@ class ActivitySummary:
             return None
     
     def detect_periods_raw(self, events):
-        """Detect working periods and breaks WITHOUT filtering - for timeline display"""
+        """Detect working periods and breaks WITHOUT filtering - for timeline display.
+        Gaps > session_timeout are marked as 'session_end'."""
         if not events:
             return []
         
         periods = []
         current_period = {
-            'start': None,
-            'end': None,
-            'events': [],
-            'type': 'work'
+            'start': None, 'end': None, 'events': [], 'type': 'work'
         }
         
         for i, event in enumerate(events):
@@ -344,31 +400,31 @@ class ActivitySummary:
                 last_timestamp = self.parse_timestamp(current_period['events'][-1]['timestamp'])
                 time_gap = (timestamp - last_timestamp).total_seconds()
                 
-                if time_gap > self.break_threshold:
-                    # End current period
+                if time_gap > self.session_timeout:
                     current_period['end'] = last_timestamp
                     periods.append(current_period)
-                    
-                    # Add break period (ALWAYS include for timeline)
-                    break_period = {
-                        'start': last_timestamp,
-                        'end': timestamp,
-                        'events': [],
-                        'type': 'break'
-                    }
-                    periods.append(break_period)
-                    
-                    # Start new work period
+                    periods.append({
+                        'start': last_timestamp, 'end': timestamp,
+                        'events': [], 'type': 'session_end'
+                    })
                     current_period = {
-                        'start': timestamp,
-                        'end': None,
-                        'events': [event],
-                        'type': 'work'
+                        'start': timestamp, 'end': None,
+                        'events': [event], 'type': 'work'
+                    }
+                elif time_gap > self.break_threshold:
+                    current_period['end'] = last_timestamp
+                    periods.append(current_period)
+                    periods.append({
+                        'start': last_timestamp, 'end': timestamp,
+                        'events': [], 'type': 'break'
+                    })
+                    current_period = {
+                        'start': timestamp, 'end': None,
+                        'events': [event], 'type': 'work'
                     }
                 else:
                     current_period['events'].append(event)
         
-        # Close final period
         if current_period['events']:
             current_period['end'] = self.parse_timestamp(current_period['events'][-1]['timestamp'])
             periods.append(current_period)
@@ -376,16 +432,20 @@ class ActivitySummary:
         return periods
     
     def detect_periods(self, events):
-        """Detect working periods and breaks in event list"""
+        """Detect working periods, breaks, and session boundaries.
+        
+        Gap classification:
+          < 5 min:           continuous work
+          5-30 min:          short break
+          30 min - 1 hr:     stepped away
+          > 1 hr:            session ended (excluded from stats)
+        """
         if not events:
             return []
         
         periods = []
         current_period = {
-            'start': None,
-            'end': None,
-            'events': [],
-            'type': 'work'  # 'work' or 'break'
+            'start': None, 'end': None, 'events': [], 'type': 'work'
         }
         
         for i, event in enumerate(events):
@@ -394,89 +454,91 @@ class ActivitySummary:
                 continue
             
             if current_period['start'] is None:
-                # Start first period
                 current_period['start'] = timestamp
                 current_period['events'].append(event)
             else:
-                # Check time gap from last event
                 last_timestamp = self.parse_timestamp(current_period['events'][-1]['timestamp'])
                 time_gap = (timestamp - last_timestamp).total_seconds()
                 
-                if time_gap > self.break_threshold:
-                    # End current period
+                if time_gap > self.session_timeout:
+                    # SESSION ENDED — exclude from stats
                     current_period['end'] = last_timestamp
                     periods.append(current_period)
-                    
-                    # Add break period (will validate later)
-                    break_period = {
-                        'start': last_timestamp,
-                        'end': timestamp,
-                        'events': [],
-                        'type': 'break'
-                    }
-                    periods.append(break_period)
-                    
-                    # Start new work period
+                    periods.append({
+                        'start': last_timestamp, 'end': timestamp,
+                        'events': [], 'type': 'session_end'
+                    })
                     current_period = {
-                        'start': timestamp,
-                        'end': None,
-                        'events': [event],
-                        'type': 'work'
+                        'start': timestamp, 'end': None,
+                        'events': [event], 'type': 'work'
+                    }
+                elif time_gap > self.break_threshold:
+                    # BREAK or STEPPED AWAY
+                    current_period['end'] = last_timestamp
+                    periods.append(current_period)
+                    periods.append({
+                        'start': last_timestamp, 'end': timestamp,
+                        'events': [], 'type': 'break'
+                    })
+                    current_period = {
+                        'start': timestamp, 'end': None,
+                        'events': [event], 'type': 'work'
                     }
                 else:
-                    # Continue current period
                     current_period['events'].append(event)
         
-        # Close final period
         if current_period['events']:
             current_period['end'] = self.parse_timestamp(current_period['events'][-1]['timestamp'])
             periods.append(current_period)
         
-        # Remove breaks that aren't between substantial work periods
-        # Only count a break if there's meaningful work both before AND after
+        # Filter: drop session_end markers, validate breaks
         filtered_periods = []
         for i, period in enumerate(periods):
-            if period['type'] == 'break':
-                # Check if there's a work period after this break
+            if period['type'] == 'session_end':
+                continue
+            elif period['type'] == 'break':
                 has_work_after = False
                 if i + 1 < len(periods):
                     next_period = periods[i + 1]
-                    # Only count as real break if next work period has 10+ events
                     if next_period['type'] == 'work' and len(next_period['events']) >= 10:
                         has_work_after = True
-                
-                # Only include break if there's substantial work after
                 if has_work_after:
                     filtered_periods.append(period)
             else:
-                # Always include work periods
                 filtered_periods.append(period)
         
         return filtered_periods
     
     def count_words(self, events):
-        """Count words by finding keystroke sequences ending in space, period, enter, or tab"""
+        """Count words using keystroke categories (char/separator/modifier).
+        A word = sequence of 'char' keystrokes followed by a 'separator'."""
         word_count = 0
-        current_chars = []
+        has_chars = False
         
         for event in events:
             if event['event_type'] == 'keystroke':
                 key = event['key']
-                if key == 'space':
-                    if current_chars:  # We completed a word
+                if key == 'separator':
+                    if has_chars:
                         word_count += 1
-                        current_chars = []
-                elif key in ['enter', 'tab', 'return', '.', 'period']:
-                    if current_chars:  # End of word
+                        has_chars = False
+                elif key == 'char':
+                    has_chars = True
+                # 'modifier' keys are ignored for word counting
+                
+                # Legacy support: handle old data with raw key values
+                elif key in ('space', 'enter', 'tab', 'return', '.', 'period'):
+                    if has_chars:
                         word_count += 1
-                        current_chars = []
-                elif key not in ['shift', 'ctrl', 'alt', 'cmd', 'shift_r', 
+                        has_chars = False
+                elif key not in ('shift', 'ctrl', 'alt', 'cmd', 'shift_r',
                                 'ctrl_r', 'alt_r', 'backspace', 'delete',
-                                'up', 'down', 'left', 'right', 'esc']:
-                    current_chars.append(key)
+                                'up', 'down', 'left', 'right', 'esc',
+                                'modifier'):
+                    has_chars = True
         
         # Count final word if exists
-        if current_chars:
+        if has_chars:
             word_count += 1
         
         return word_count
@@ -495,12 +557,12 @@ class ActivitySummary:
             if not timestamp:
                 continue
             
-            # Check if this starts a new session (big gap from previous)
+            # Check if this starts a new session (gap exceeds session timeout)
             if i > 0:
                 prev_timestamp = self.parse_timestamp(events[i-1]['timestamp'])
                 if prev_timestamp:
                     gap = (timestamp - prev_timestamp).total_seconds()
-                    if gap > self.break_threshold:
+                    if gap > self.session_timeout:
                         # New session starting
                         current_session_start = timestamp.date()
             
@@ -541,10 +603,9 @@ class ActivitySummary:
         mouse_events = [e for e in events if e['event_type'] == 'click']
         keyboard_events = [e for e in events if e['event_type'] == 'keystroke']
         
-        # Calculate total time
+        # Calculate first/last event timestamps (for display only)
         first_event = self.parse_timestamp(events[0]['timestamp'])
         last_event = self.parse_timestamp(events[-1]['timestamp'])
-        total_duration = (last_event - first_event).total_seconds()
         
         # Calculate working time
         work_time = sum([(p['end'] - p['start']).total_seconds() 
@@ -557,6 +618,9 @@ class ActivitySummary:
         # Calculate stepped away time
         stepped_away_time = sum([(p['end'] - p['start']).total_seconds() 
                                  for p in stepped_away if p['end']])
+        
+        # Total duration = work + breaks + stepped away (excludes session_end gaps)
+        total_duration = work_time + break_time + stepped_away_time
         
         # Calculate averages
         avg_period_length = work_time / len(work_periods) if work_periods else 0
@@ -740,11 +804,6 @@ class ActivitySummary:
         lines.append(f"\n🕐 {date_label.upper()} - HOURLY TIMELINE")
         lines.append("-" * 60)
         
-        if not periods:
-            lines.append("No activity data")
-            return lines
-        
-        # Get session start and end
         all_times = []
         for period in periods:
             if period['start']:
@@ -757,31 +816,29 @@ class ActivitySummary:
             return lines
         
         session_start = min(all_times)
-        session_end = max(all_times)
-        
-        # Add session start
         lines.append(f"{session_start.strftime('%I:%M %p').lstrip('0'):<15} | Session Started")
         
-        # Process each period - show state changes and durations
         for i, period in enumerate(periods):
             if not period['start'] or not period['end']:
                 continue
             
             start_time = period['start'].strftime('%I:%M %p').lstrip('0')
+            end_time = period['end'].strftime('%I:%M %p').lstrip('0')
             duration = (period['end'] - period['start']).total_seconds() / 60
             
-            if period['type'] == 'work':
-                # Show when working starts with duration
+            if period['type'] == 'session_end':
+                lines.append(f"{start_time:<15} | Session Ended")
+                lines.append(f"{'':15} |")
+                lines.append(f"{end_time:<15} | Session Started")
+            elif period['type'] == 'work':
                 lines.append(f"{start_time:<15} | Working ({int(duration)} min)")
-            
             elif period['type'] == 'break':
-                # Separate breaks (<30 min) from stepped away (>=30 min)
                 if duration >= 30:
                     lines.append(f"{start_time:<15} | Stepped Away ({int(duration)} min)")
                 else:
                     lines.append(f"{start_time:<15} | Break ({int(duration)} min)")
         
-        # Add session end
+        session_end = max(all_times)
         lines.append(f"{session_end.strftime('%I:%M %p').lstrip('0'):<15} | Session Ended")
         
         return lines
@@ -965,7 +1022,7 @@ class ActivityTrackerGUI:
         
         # Create main window
         self.root = tk.Tk()
-        self.root.title("Activity Tracker")
+        self.root.title(f"Activity Tracker v{APP_VERSION}")
         self.root.geometry(WINDOW_SIZE)
         self.root.resizable(False, False)
         
@@ -987,9 +1044,9 @@ class ActivityTrackerGUI:
                 blended = Image.alpha_composite(img, overlay)
                 
                 self.bg_image = ImageTk.PhotoImage(blended)
-                print(f"Loaded background image with overlay: {BG_IMAGE_PATH}")
+                log.debug(f"Loaded background image with overlay: {BG_IMAGE_PATH}")
             except Exception as e:
-                print(f"Could not load background image: {e}")
+                log.warning(f"Could not load background image: {e}")
                 self.bg_image = None
         
         # Set background
@@ -1032,26 +1089,18 @@ class ActivityTrackerGUI:
                                              fg=STATUS_TRACKING_COLOR, bg='#000000')
                 self.canvas.create_window(width//2, 20, window=self.status_label)
                 
-                # Create buttons with customizable colors
+                # Create buttons — 3 buttons: PAUSE, SUMMARY, FOLDER
                 button_y = height//2
-                button_spacing = 70
-                start_x = width//2 - button_spacing * 1.5
+                button_spacing = 80
+                start_x = width//2 - button_spacing
                 
-                self.toggle_btn = tk.Button(self.root, text="STOP",
-                                            command=self.toggle_tracking,
-                                            font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
-                                            bg=BUTTON_STOP_BG, fg=BUTTON_TEXT_COLOR,
-                                            width=7, height=1, 
-                                            relief=tk.FLAT, bd=0)
-                self.canvas.create_window(start_x, button_y, window=self.toggle_btn)
-                
-                self.mode_btn = tk.Button(self.root, text="APP",
-                                         command=self.toggle_mode,
-                                         font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
-                                         bg=BUTTON_MODE_BG, fg=BUTTON_TEXT_COLOR,
-                                         width=7, height=1,
-                                         relief=tk.FLAT, bd=0)
-                self.canvas.create_window(start_x + button_spacing, button_y, window=self.mode_btn)
+                self.pause_btn = tk.Button(self.root, text="PAUSE",
+                                           command=self.toggle_pause,
+                                           font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
+                                           bg=BUTTON_PAUSE_BG, fg=BUTTON_TEXT_COLOR,
+                                           width=7, height=1, 
+                                           relief=tk.FLAT, bd=0)
+                self.canvas.create_window(start_x, button_y, window=self.pause_btn)
                 
                 self.summary_btn = tk.Button(self.root, text="SUMMARY",
                                             command=self.show_summary,
@@ -1059,7 +1108,7 @@ class ActivityTrackerGUI:
                                             bg="#2D9C9C", fg=BUTTON_TEXT_COLOR,
                                             width=7, height=1,
                                             relief=tk.FLAT, bd=0)
-                self.canvas.create_window(start_x + button_spacing*2, button_y, window=self.summary_btn)
+                self.canvas.create_window(start_x + button_spacing, button_y, window=self.summary_btn)
                 
                 self.folder_btn = tk.Button(self.root, text="FOLDER",
                                            command=self.open_data_folder,
@@ -1067,7 +1116,7 @@ class ActivityTrackerGUI:
                                            bg=BUTTON_FOLDER_BG, fg=BUTTON_TEXT_COLOR,
                                            width=7, height=1,
                                            relief=tk.FLAT, bd=0)
-                self.canvas.create_window(start_x + button_spacing*3, button_y, window=self.folder_btn)
+                self.canvas.create_window(start_x + button_spacing*2, button_y, window=self.folder_btn)
                 
                 # Stats label at bottom  
                 self.stats_label = tk.Label(self.root, text="0m 0s | 0 events", 
@@ -1085,21 +1134,13 @@ class ActivityTrackerGUI:
                 button_frame = tk.Frame(self.main_frame, bg=BG_COLOR)
                 button_frame.pack(pady=5)
                 
-                self.toggle_btn = tk.Button(button_frame, text="STOP",
-                                            command=self.toggle_tracking,
-                                            font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
-                                            bg=BUTTON_STOP_BG, fg='#FFFFFF',
-                                            width=7, height=1, 
-                                            relief=tk.FLAT, bd=0)
-                self.toggle_btn.pack(side=tk.LEFT, padx=2)
-                
-                self.mode_btn = tk.Button(button_frame, text="APP",
-                                         command=self.toggle_mode,
-                                         font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
-                                         bg=BUTTON_MODE_BG, fg='#FFFFFF',
-                                         width=7, height=1,
-                                         relief=tk.FLAT, bd=0)
-                self.mode_btn.pack(side=tk.LEFT, padx=2)
+                self.pause_btn = tk.Button(button_frame, text="PAUSE",
+                                           command=self.toggle_pause,
+                                           font=(FONT_FAMILY, FONT_SIZE_BUTTON, 'bold'),
+                                           bg=BUTTON_PAUSE_BG, fg='#FFFFFF',
+                                           width=7, height=1, 
+                                           relief=tk.FLAT, bd=0)
+                self.pause_btn.pack(side=tk.LEFT, padx=2)
                 
                 self.summary_btn = tk.Button(button_frame, text="SUMMARY",
                                             command=self.show_summary,
@@ -1123,9 +1164,7 @@ class ActivityTrackerGUI:
                 self.stats_label.pack(pady=5)
             
         except Exception as e:
-            print(f"Error creating UI: {e}")
-            import traceback
-            traceback.print_exc()
+            log.error(f"Error creating UI: {e}", exc_info=True)
     
     def _darken_color(self, hex_color):
         """Darken a hex color by 20% for active state"""
@@ -1137,51 +1176,30 @@ class ActivityTrackerGUI:
         except:
             return hex_color
     
-    def toggle_tracking(self):
-        """Toggle tracking on/off"""
+    def toggle_pause(self):
+        """Toggle pause/resume for temporary privacy (e.g. typing passwords)"""
         try:
-            if self.tracker.tracking:
-                # Stop current tracking
-                self.tracker.stop_tracking()
-                self.toggle_btn.config(text="START", bg=BUTTON_START_BG, fg=BUTTON_TEXT_COLOR)
-                self.status_label.config(text="STOPPED", fg=STATUS_STOPPED_COLOR)
-            else:
-                # Start new tracking session
-                import time
-                time.sleep(0.2)
-                
-                # Start tracking in a new thread
-                self.tracking_thread = threading.Thread(
-                    target=self.tracker.start_tracking, daemon=True)
-                self.tracking_thread.start()
-                
-                self.toggle_btn.config(text="STOP", bg=BUTTON_STOP_BG, fg=BUTTON_TEXT_COLOR)
+            if self.tracker.paused:
+                self.tracker.resume_tracking()
+                self.pause_btn.config(text="PAUSE", bg=BUTTON_PAUSE_BG, fg=BUTTON_TEXT_COLOR)
                 self.status_label.config(text="TRACKING", fg=STATUS_TRACKING_COLOR)
+            else:
+                self.tracker.pause_tracking()
+                self.pause_btn.config(text="RESUME", bg=BUTTON_RESUME_BG, fg=BUTTON_TEXT_COLOR)
+                self.status_label.config(text="PAUSED", fg=STATUS_PAUSED_COLOR)
         except Exception as e:
-            print(f"Error toggling tracking: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    def toggle_mode(self):
-        """Toggle between app-specific and global mode"""
-        is_global = self.tracker.toggle_mode()
-        if is_global:
-            self.mode_btn.config(text="GLOBAL")
-            print("Switched to Global mode")
-        else:
-            self.mode_btn.config(text="APP")
-            print("Switched to App-Specific mode")
+            log.error(f"Error toggling pause: {e}", exc_info=True)
     
     def show_summary(self):
         """Generate and display activity summary in a file"""
-        print("\n🔍 Generating summary report...")
+        log.info("Generating summary report...")
         
         # Generate report (this returns the file paths)
         report_file, csv_file = self.summary.generate_summary_report()
         
-        print(f"✓ Text report saved to: {report_file}")
+        log.info(f"Text report saved to: {report_file}")
         if csv_file:
-            print(f"✓ CSV report saved to: {csv_file}")
+            log.info(f"CSV report saved to: {csv_file}")
         
         # Open the text file automatically
         try:
@@ -1191,10 +1209,10 @@ class ActivityTrackerGUI:
                 subprocess.run(['start', report_file], shell=True)
             else:  # Linux
                 subprocess.run(['xdg-open', report_file])
-            print("✓ Report opened!")
+            log.info("Report opened successfully")
         except Exception as e:
-            print(f"Report saved but couldn't auto-open: {e}")
-            print(f"You can manually open: {report_file}")
+            log.warning(f"Report saved but could not auto-open: {e}")
+            log.info(f"Manual open path: {report_file}")
     
     def open_data_folder(self):
         """Open the activity_data folder"""
@@ -1207,9 +1225,9 @@ class ActivityTrackerGUI:
                 subprocess.run(['explorer', folder_path])
             else:  # Linux
                 subprocess.run(['xdg-open', folder_path])
-            print(f"Opened folder: {folder_path}")
+            log.debug(f"Opened folder: {folder_path}")
         except Exception as e:
-            print(f"Could not open folder: {e}")
+            log.warning(f"Could not open folder: {e}")
     
     def start_status_updates(self):
         """Start the status update loop"""
@@ -1218,19 +1236,19 @@ class ActivityTrackerGUI:
     def update_status(self):
         """Update status display"""
         try:
-            if self.tracker.tracking:
+            if self.tracker.tracking and self.tracker.session_start:
                 session_duration = (datetime.now() - self.tracker.session_start).total_seconds()
                 minutes = int(session_duration // 60)
                 seconds = int(session_duration % 60)
-                stats_text = f"{minutes}m {seconds}s | {self.tracker.event_count} events"
+                paused_indicator = " (PAUSED)" if self.tracker.paused else ""
+                stats_text = f"{minutes}m {seconds}s | {self.tracker.event_count} events{paused_indicator}"
             else:
-                all_events = self.tracker.load_all_sessions()
-                stats_text = f"Total: {len(all_events):,} events"
+                stats_text = "Starting..."
             
             if hasattr(self, 'stats_label') and self.stats_label.winfo_exists():
                 self.stats_label.config(text=stats_text)
         except Exception as e:
-            print(f"Status update error: {e}")
+            log.debug(f"Status update error: {e}")
         
         # Schedule next update
         try:
@@ -1246,12 +1264,17 @@ class ActivityTrackerGUI:
     
     def on_closing(self):
         """Clean up when closing"""
+        log.info("Application closing -- saving final session...")
         self.tracker.stop_tracking()
+        log.info("Goodbye!")
         self.root.destroy()
 
 
 if __name__ == "__main__":
-    print("Activity Tracker Started")
-    print("=" * 40)
+    log.info("=" * 50)
+    log.info(f"Activity Tracker v{APP_VERSION}")
+    log.info(f"Platform: {platform.system()} | Python: {platform.python_version()}")
+    log.info(f"pynput available: {PYNPUT_AVAILABLE}")
+    log.info("=" * 50)
     app = ActivityTrackerGUI()
     app.run()
