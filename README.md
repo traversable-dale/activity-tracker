@@ -1,6 +1,7 @@
 # Activity Tracker
+### Cross-Platform Activity Monitor
 
-**Version 0.2.0** | Cross-Platform Activity Monitor
+**Version 0.2.0** | Updated February 14, 2026
 
 A lightweight desktop app that tracks keyboard and mouse activity by application. Analyze your computer usage patterns with detailed reports.
 
