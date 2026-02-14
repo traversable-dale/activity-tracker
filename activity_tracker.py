@@ -64,32 +64,37 @@ log = setup_logger()
 
 # =============================================
 
-# Fix for pynput on newer macOS/Python versions
+# macOS-specific imports (only on macOS)
+if platform.system() == 'Darwin':
+    try:
+        from AppKit import NSEvent, NSWorkspace
+        from Quartz import (
+            CGEventCreateKeyboardEvent,
+            CGEventPost,
+            CGEventGetIntegerValueField,
+            kCGEventSourceStateHIDSystemState,
+            kCGKeyboardEventKeycode,
+            kCGHIDEventTap
+        )
+    except ImportError as e:
+        log.warning(f"macOS libraries not available: {e}")
+
+# Windows-specific imports (only on Windows)
+elif platform.system() == 'Windows':
+    try:
+        import win32gui
+        import win32process
+        import psutil
+    except ImportError as e:
+        log.error(f"Windows libraries missing. Install: pip install pywin32 psutil")
+
+# Cross-platform imports
 try:
-    from AppKit import NSEvent
-    from Quartz import (
-        CGEventCreateKeyboardEvent,
-        CGEventPost,
-        CGEventGetIntegerValueField,
-        kCGEventSourceStateHIDSystemState,
-        kCGKeyboardEventKeycode,
-        kCGHIDEventTap
-    )
-    
-    # Import pynput after setting up the fix
     from pynput import keyboard, mouse
     PYNPUT_AVAILABLE = True
 except ImportError as e:
-    log.warning(f"Could not import pynput or required libraries: {e}")
+    log.warning(f"Could not import pynput: {e}")
     PYNPUT_AVAILABLE = False
-
-# Platform-specific imports
-if platform.system() == 'Darwin':  # macOS
-    from AppKit import NSWorkspace
-elif platform.system() == 'Windows':
-    import win32gui
-    import win32process
-    import psutil
 
 
 # ============ CUSTOMIZATION SETTINGS ============
