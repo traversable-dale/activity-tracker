@@ -14,7 +14,6 @@ from datetime import datetime
 import threading
 import csv
 import os
-import sys
 import logging
 from logging.handlers import RotatingFileHandler
 from collections import defaultdict
@@ -103,19 +102,9 @@ except ImportError as e:
 
 WINDOW_SIZE = "320x120"
 
-# Helper function to find resources in both dev and bundled mode
-def resource_path(relative_path):
-    """Get absolute path to resource, works for dev and for PyInstaller"""
-    try:
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
-
 # Background: Use color OR image (image takes priority if found)
 BG_COLOR = "#FFFFFF"  # Background color (used when no image)
-BG_IMAGE_PATH = resource_path(os.path.join("assets", "bg", "background.png"))  # Optional background image
+BG_IMAGE_PATH = "assets/bg/background.png"  # Optional background image
 
 # Button colors
 BUTTON_PAUSE_BG = "#9C2D2D"    # Pause button (red-ish)
@@ -741,16 +730,15 @@ class ActivitySummary:
         report_file = os.path.join(reports_folder, f'summary_{timestamp}.md')
         csv_file = os.path.join(reports_folder, f'summary_{timestamp}.csv')
         
-        # Build report content in Markdown format
+        # Build report content
         lines = []
-        lines.append("# Activity Tracker Summary")
+        lines.append("# ACTIVITY TRACKER SUMMARY")
         lines.append("")
         
         # Load all events
         all_events = self.load_all_events()
         if not all_events:
-            lines.append("\nNo data found!")
-            # Save and return
+            lines.append("No data found!")
             with open(report_file, 'w', encoding='utf-8') as f:
                 f.write('\n'.join(lines))
             return report_file, None
@@ -766,43 +754,43 @@ class ActivitySummary:
         today_stats = None
         today_periods = []
         if today_events:
-            lines.append("\n:love_letter: Today's Summary")
-            lines.append("---")
+            lines.append("## TODAY'S SUMMARY")
+            lines.append("")
             today_stats = self.analyze_events(today_events, "Today")
             lines.extend(self.format_stats(today_stats))
             
             # Generate timeline - use RAW periods before filtering
-            # This shows all gaps including ones at end of sessions
             raw_periods = self.detect_periods_raw(today_events)
             lines.extend(self.generate_timeline(raw_periods, "Today"))
             
             # Today's program table
-            lines.append("---")
-            lines.append("\n:green_circle: Today - Program Usage")
+            lines.append("### Today - Program Usage")
             lines.append("")
             lines.extend(self.format_program_table(today_stats['program_stats']))
         else:
-            lines.append("\n:green_circle: Today's Summary")
+            lines.append("## TODAY'S SUMMARY")
             lines.append("")
             lines.append("No activity recorded today.")
+            lines.append("")
         
         # Analyze lifetime
-        lines.append("\n\n" + "---")
-        lines.append(":yellow_square: Lifetime Summary")
-        
+        lines.append("---")
+        lines.append("")
+        lines.append("## LIFETIME SUMMARY")
+        lines.append("")
         lifetime_stats = self.analyze_events(all_events, "Lifetime")
         lines.extend(self.format_stats(lifetime_stats))
         
         # Lifetime program table
-        lines.append("\n:yellow_square: Lifetime - Program Usage")
+        lines.append("### Lifetime - Program Usage")
         lines.append("")
         lines.extend(self.format_program_table(lifetime_stats['program_stats']))
         
+        lines.append("---")
         lines.append("")
-        lines.append(f"---\n\n**Report generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        lines.append(f"*Report generated at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*")
         
-        
-        # Save text report
+        # Save markdown report
         with open(report_file, 'w', encoding='utf-8') as f:
             f.write('\n'.join(lines))
         
@@ -812,13 +800,14 @@ class ActivitySummary:
         return report_file, csv_file
     
     def generate_timeline(self, periods, date_label="Today"):
-        """Generate hourly timeline of work vs break periods"""
+        """Generate hourly timeline of work vs break periods (markdown code block)"""
         if not periods:
             return []
         
         lines = []
-        lines.append(f"\n:hourglass: {date_label.upper()} - HOURLY TIMELINE")
+        lines.append(f"### {date_label} - Hourly Timeline")
         lines.append("")
+        lines.append("```")
         
         all_times = []
         for period in periods:
@@ -829,10 +818,12 @@ class ActivitySummary:
         
         if not all_times:
             lines.append("No activity data")
+            lines.append("```")
+            lines.append("")
             return lines
         
         session_start = min(all_times)
-        lines.append(f"{session_start.strftime('%I:%M %p').lstrip('0'):<15} | Session Started")
+        lines.append(f"{session_start.strftime('%I:%M %p').lstrip('0'):<15} -- Session Started")
         
         for i, period in enumerate(periods):
             if not period['start'] or not period['end']:
@@ -843,20 +834,24 @@ class ActivitySummary:
             duration = (period['end'] - period['start']).total_seconds() / 60
             
             if period['type'] == 'session_end':
-                lines.append(f"{start_time:<15} | Session Ended")
-                lines.append(f"{'':15} |")
-                lines.append(f"{end_time:<15} | Session Started")
+                lines.append(f"{start_time:<15} -- Session Ended")
+                lines.append(f"{'':15}")
+                lines.append(f"{end_time:<15} -- Session Started")
             elif period['type'] == 'work':
-                lines.append(f"{start_time:<15} | Working ({int(duration)} min)")
+                lines.append(f"{start_time:<15} -- Working ({int(duration)} min)")
             elif period['type'] == 'break':
                 if duration >= 30:
-                    lines.append(f"{start_time:<15} | Stepped Away ({int(duration)} min)")
+                    lines.append(f"{start_time:<15} -- Stepped Away ({int(duration)} min)")
                 else:
-                    lines.append(f"{start_time:<15} | Break ({int(duration)} min)")
+                    lines.append(f"{start_time:<15} -- Break ({int(duration)} min)")
         
         session_end = max(all_times)
-        lines.append(f"{session_end.strftime('%I:%M %p').lstrip('0'):<15} | Session Ended")
+        lines.append(f"{session_end.strftime('%I:%M %p').lstrip('0'):<15} -- Session Ended")
+        lines.append("```")
+        lines.append("")
         
+        return lines
+    
         return lines
     
     def save_csv_report(self, csv_file, today_stats, lifetime_stats):
@@ -962,14 +957,13 @@ class ActivitySummary:
             writer.writerows(rows)
     
     def format_stats(self, stats):
-        """Format statistics as Markdown tables"""
+        """Format statistics as markdown tables"""
         if not stats:
             return []
         
         lines = []
         
-        # Session Duration Table
-        lines.append("")
+        # Session duration
         lines.append("**Session Duration**")
         lines.append("")
         lines.append("| Metric | Value |")
@@ -977,39 +971,32 @@ class ActivitySummary:
         lines.append(f"| Duration | {self.format_time(stats['total_duration_seconds'])} |")
         lines.append(f"| Started | {stats['first_event'].strftime('%I:%M %p').lstrip('0')} |")
         lines.append(f"| Ended | {stats['last_event'].strftime('%I:%M %p').lstrip('0')} |")
+        lines.append("")
         
-        # Events Table
+        # Events
+        lines.append("**Activity**")
         lines.append("")
-        lines.append("**Total Events**")
-        lines.append("")
-        lines.append("| Type | Count |")
-        lines.append("|------|-------|")
-        lines.append(f"| Total | {stats['total_events']:,} |")
-        lines.append(f"| Mouse | {stats['mouse_events']:,} |")
-        lines.append(f"| Keyboard | {stats['keyboard_events']:,} |")
-        
-        # Speed Metrics Table
-        lines.append("")
-        lines.append("**Speed Metrics**")
-        lines.append("")
-        lines.append("| Metric | Rate |")
-        lines.append("|--------|------|")
+        lines.append("| Metric | Value |")
+        lines.append("|--------|-------|")
+        lines.append(f"| Total Events | {stats['total_events']:,} |")
+        lines.append(f"| Mouse Events | {stats['mouse_events']:,} |")
+        lines.append(f"| Keyboard Events | {stats['keyboard_events']:,} |")
         lines.append(f"| Words per Minute | {stats['wpm']:.1f} |")
         lines.append(f"| Clicks per Minute | {stats['cpm']:.1f} |")
-        
-        # Working Time Table
         lines.append("")
+        
+        # Work time
         lines.append("**Time Working**")
         lines.append("")
         lines.append("| Metric | Value |")
         lines.append("|--------|-------|")
-        lines.append(f"| Total Working Time | {self.format_time(stats['work_time_seconds'])} |")
+        lines.append(f"| Time Working | {self.format_time(stats['work_time_seconds'])} |")
         lines.append(f"| Working Periods | {stats['work_periods']} |")
         lines.append(f"| Avg Period Length | {self.format_time(stats['avg_period_length'])} |")
         lines.append(f"| Avg Period Events | {stats['avg_period_events']:.0f} |")
-        
-        # Break Time Table
         lines.append("")
+        
+        # Break time
         lines.append("**Time on Break**")
         lines.append("")
         lines.append("| Metric | Value |")
@@ -1018,22 +1005,23 @@ class ActivitySummary:
         lines.append(f"| Number of Breaks | {stats['num_breaks']} |")
         if stats['num_breaks'] > 0:
             lines.append(f"| Avg Break Length | {self.format_time(stats['avg_break_length'])} |")
+        lines.append("")
         
-        # Stepped Away Table (if applicable)
+        # Stepped away
         if stats['num_stepped_away'] > 0:
-            lines.append("")
             lines.append("**Time Stepped Away**")
             lines.append("")
             lines.append("| Metric | Value |")
             lines.append("|--------|-------|")
-            lines.append(f"| Total Time Away | {self.format_time(stats['stepped_away_time_seconds'])} |")
+            lines.append(f"| Time Stepped Away | {self.format_time(stats['stepped_away_time_seconds'])} |")
             lines.append(f"| Times Stepped Away | {stats['num_stepped_away']} |")
             lines.append(f"| Avg Duration | {self.format_time(stats['avg_stepped_away_length'])} |")
+            lines.append("")
         
         return lines
-
+    
     def format_program_table(self, program_stats):
-        """Format program comparison table as Markdown table"""
+        """Format program comparison as markdown table"""
         if not program_stats:
             return []
         
@@ -1045,21 +1033,21 @@ class ActivitySummary:
                                 reverse=True)
         
         # Markdown table header
-        lines.append("")
         lines.append("| Program | Time | Clicks | Keys | Total |")
         lines.append("|---------|------|--------|------|-------|")
         
-        # Table rows
+        # Rows
         for program, stats in sorted_programs:
             time_str = self.format_time(stats['time_seconds'])
             lines.append(f"| {program} | {time_str} | {stats['clicks']:,} | {stats['keystrokes']:,} | {stats['total']:,} |")
         
-        # Totals row (bold in Markdown)
+        # Totals
         total_time = sum([s['time_seconds'] for s in program_stats.values()])
         total_clicks = sum([s['clicks'] for s in program_stats.values()])
         total_keystrokes = sum([s['keystrokes'] for s in program_stats.values()])
         total_events = sum([s['total'] for s in program_stats.values()])
         lines.append(f"| **TOTAL** | **{self.format_time(total_time)}** | **{total_clicks:,}** | **{total_keystrokes:,}** | **{total_events:,}** |")
+        lines.append("")
         
         return lines
 
@@ -1076,15 +1064,6 @@ class ActivityTrackerGUI:
         self.root.title(f"Activity Tracker v{APP_VERSION}")
         self.root.geometry(WINDOW_SIZE)
         self.root.resizable(False, False)
-        
-        # Set window icon
-        try:
-            icon_path = resource_path(os.path.join("ref", "TDT-logo-white-circle.ico"))
-            if os.path.exists(icon_path):
-                self.root.iconbitmap(icon_path)
-                log.debug(f"Loaded window icon: {icon_path}")
-        except Exception as e:
-            log.warning(f"Could not load window icon: {e}")
         
         # Try to load background image, otherwise use color
         self.bg_image = None
@@ -1261,22 +1240,15 @@ class ActivityTrackerGUI:
         if csv_file:
             log.info(f"CSV report saved to: {csv_file}")
         
-        # Open the markdown file automatically
+        # Open the text file automatically
         try:
             if platform.system() == 'Darwin':  # macOS
                 subprocess.run(['open', report_file])
             elif platform.system() == 'Windows':
-                # Try VS Code first, fall back to default .md handler
-                try:
-                    subprocess.run(['code', report_file], timeout=2)
-                    log.info("Report opened in VS Code")
-                except:
-                    # VS Code not available, use default .md handler
-                    os.startfile(report_file)
-                    log.info("Report opened with default editor")
+                subprocess.run(['start', report_file], shell=True)
             else:  # Linux
                 subprocess.run(['xdg-open', report_file])
-                log.info("Report opened successfully")
+            log.info("Report opened successfully")
         except Exception as e:
             log.warning(f"Report saved but could not auto-open: {e}")
             log.info(f"Manual open path: {report_file}")
