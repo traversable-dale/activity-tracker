@@ -10,3 +10,5 @@ TD/
 dist/
 Output/
 build/
+td_out/*
+td_out/

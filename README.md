@@ -48,95 +48,6 @@ No special permissions needed!
 
 ---
 
-## What It Does
-
-- **Tracks** every keystroke and mouse click
-- **Records** which application you're using
-- **Saves** everything to CSV files for analysis
-- **Generates** detailed reports with stats and timelines
-- **Privacy-safe** - keystroke categories only, no raw text capture
-
-### Features
-
-- **Simple GUI** - Compact 320x120 window with PAUSE, SUMMARY, FOLDER buttons
-- **Auto-save** - Events saved every 30 seconds
-- **Analytics** - WPM, CPM, work periods, breaks, time per app
-- **Reports** - Export to TXT and CSV formats
-- **100% Offline** - All data stays on your computer
-- **Customizable** - Colors, fonts, window size (edit settings at top of script)
-
----
-
-## Usage
-
-### Interface
-
-```
-┌──────────────────────────────────────┐
-│           TRACKING                   │
-│                                      │
-│  [PAUSE]  [SUMMARY]  [FOLDER]       │
-│                                      │
-│       2m 30s | 145 events            │
-└──────────────────────────────────────┘
-```
-
-- **PAUSE/RESUME** - Temporarily stop recording (for privacy)
-- **SUMMARY** - Generate analytics report (TXT + CSV)
-- **FOLDER** - Open data directory
-
-### Data Output
-
-CSV files saved to `activity_data/`:
-
-```csv
-timestamp,app,event_type,key
-2026-02-14T15:35:00.123456,chrome.exe,keystroke,char
-2026-02-14T15:35:00.234567,chrome.exe,keystroke,separator
-2026-02-14T15:35:00.345678,chrome.exe,click,left
-```
-
-Reports saved to `activity_data/reports/`:
-- `summary_YYYYMMDD_HHMMSS.txt` - Human-readable
-- `summary_YYYYMMDD_HHMMSS.csv` - Machine-readable (for TouchDesigner, etc.)
-
----
-
-## Advanced Usage
-
-### Running from Python (for integration)
-
-You can import and control the tracker programmatically from other Python scripts:
-
-```python
-# Import the tracker
-from activity_tracker import ActivityTracker
-
-# Create tracker instance
-tracker = ActivityTracker(autosave_interval=30)
-
-# Start tracking
-tracker.start_tracking()
-
-# Later: pause temporarily
-tracker.pause_tracking()
-
-# Resume
-tracker.resume_tracking()
-
-# Stop and save
-tracker.stop_tracking()
-
-# Access data
-events = tracker.load_all_sessions()
-```
-
-**Use cases:**
-- Start/stop tracking from another Python app
-- Integrate with TouchDesigner using Python DATs
-- Build custom dashboards that control the tracker
-- Schedule tracking sessions programmatically
-
 ### Command Line Options
 
 Run from terminal with custom settings:
@@ -249,6 +160,99 @@ For a full installation experience like commercial software:
 - Spec files include the background image automatically
 
 ---
+
+## What It Does
+
+- **Tracks** every keystroke and mouse click
+- **Records** which application you're using
+- **Saves** everything to CSV files for analysis
+- **Generates** detailed reports with stats and timelines
+- **Privacy-safe** - keystroke categories only, no raw text capture
+
+### Features
+
+- **Simple GUI** - Compact 320x120 window with PAUSE, SUMMARY, FOLDER buttons
+- **Auto-save** - Events saved every 30 seconds
+- **Analytics** - WPM, CPM, work periods, breaks, time per app
+- **Reports** - Export to TXT and CSV formats
+- **100% Offline** - All data stays on your computer
+- **Customizable** - Colors, fonts, window size (edit settings at top of script)
+
+---
+
+## Usage
+
+### Interface
+
+```
+┌──────────────────────────────────────┐
+│           TRACKING                   │
+│                                      │
+│  [PAUSE]  [SUMMARY]  [FOLDER]       │
+│                                      │
+│       2m 30s | 145 events            │
+└──────────────────────────────────────┘
+```
+
+- **PAUSE/RESUME** - Temporarily stop recording (for privacy)
+- **SUMMARY** - Generate analytics report (TXT + CSV)
+- **FOLDER** - Open data directory
+
+### Data Output
+
+CSV files saved to `activity_data/`:
+
+```csv
+timestamp,app,event_type,key
+2026-02-14T15:35:00.123456,chrome.exe,keystroke,char
+2026-02-14T15:35:00.234567,chrome.exe,keystroke,separator
+2026-02-14T15:35:00.345678,chrome.exe,click,left
+```
+
+Reports saved to `activity_data/reports/`:
+- `summary_YYYYMMDD_HHMMSS.txt` - Human-readable
+- `summary_YYYYMMDD_HHMMSS.csv` - Machine-readable (for TouchDesigner, etc.)
+
+---
+
+## Advanced Usage
+
+### Running from Python (for integration)
+
+You can import and control the tracker programmatically from other Python scripts:
+
+```python
+# Import the tracker
+from activity_tracker import ActivityTracker
+
+# Create tracker instance
+tracker = ActivityTracker(autosave_interval=30)
+
+# Start tracking
+tracker.start_tracking()
+
+# Later: pause temporarily
+tracker.pause_tracking()
+
+# Resume
+tracker.resume_tracking()
+
+# Stop and save
+tracker.stop_tracking()
+
+# Access data
+events = tracker.load_all_sessions()
+```
+
+**Use cases:**
+- Start/stop tracking from another Python app
+- Integrate with TouchDesigner using Python DATs
+- Build custom dashboards that control the tracker
+- Schedule tracking sessions programmatically
+
+---
+
+
 ---
 
 ## Privacy & Security
