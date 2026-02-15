@@ -4,6 +4,10 @@ Build, install, and customize Activity Tracker for Windows.
 
 ---
 
+![ref app](ref/ref-windows.png)
+
+---
+
 ## Prerequisites
 
 ```bash
