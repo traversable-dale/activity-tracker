@@ -107,6 +107,10 @@ python -m PyInstaller ActivityTracker.spec
 # Then compile installer-setup-custom.iss in Inno Setup (F9)
 ```
 
+![ref app](ref/ref-windows.png)
+![ref app](ref/ref-windows-2.png)
+
+
 For the full walkthrough, see [ref/README_WINDOWS.md](ref/README_WINDOWS.md).
 
 ---

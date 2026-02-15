@@ -104,7 +104,18 @@ WINDOW_SIZE = "320x120"
 
 # Background: Use color OR image (image takes priority if found)
 BG_COLOR = "#FFFFFF"  # Background color (used when no image)
-BG_IMAGE_PATH = "assets/bg/background.png"  # Optional background image
+# Helper to find resources in both dev and PyInstaller bundled mode
+def resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    try:
+        import sys
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_path, relative_path)
+
+BG_IMAGE_PATH = resource_path(os.path.join("assets", "bg", "background.png"))  # Optional background image
 
 # Button colors
 BUTTON_PAUSE_BG = "#9C2D2D"    # Pause button (red-ish)
@@ -1245,7 +1256,7 @@ class ActivityTrackerGUI:
             if platform.system() == 'Darwin':  # macOS
                 subprocess.run(['open', report_file])
             elif platform.system() == 'Windows':
-                subprocess.run(['start', report_file], shell=True)
+                os.startfile(report_file)
             else:  # Linux
                 subprocess.run(['xdg-open', report_file])
             log.info("Report opened successfully")
