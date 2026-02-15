@@ -64,32 +64,37 @@ log = setup_logger()
 
 # =============================================
 
-# Fix for pynput on newer macOS/Python versions
+# macOS-specific imports (only on macOS)
+if platform.system() == 'Darwin':
+    try:
+        from AppKit import NSEvent, NSWorkspace
+        from Quartz import (
+            CGEventCreateKeyboardEvent,
+            CGEventPost,
+            CGEventGetIntegerValueField,
+            kCGEventSourceStateHIDSystemState,
+            kCGKeyboardEventKeycode,
+            kCGHIDEventTap
+        )
+    except ImportError as e:
+        log.warning(f"macOS libraries not available: {e}")
+
+# Windows-specific imports (only on Windows)
+elif platform.system() == 'Windows':
+    try:
+        import win32gui
+        import win32process
+        import psutil
+    except ImportError as e:
+        log.error(f"Windows libraries missing. Install: pip install pywin32 psutil")
+
+# Cross-platform imports
 try:
-    from AppKit import NSEvent
-    from Quartz import (
-        CGEventCreateKeyboardEvent,
-        CGEventPost,
-        CGEventGetIntegerValueField,
-        kCGEventSourceStateHIDSystemState,
-        kCGKeyboardEventKeycode,
-        kCGHIDEventTap
-    )
-    
-    # Import pynput after setting up the fix
     from pynput import keyboard, mouse
     PYNPUT_AVAILABLE = True
 except ImportError as e:
-    log.warning(f"Could not import pynput or required libraries: {e}")
+    log.warning(f"Could not import pynput: {e}")
     PYNPUT_AVAILABLE = False
-
-# Platform-specific imports
-if platform.system() == 'Darwin':  # macOS
-    from AppKit import NSWorkspace
-elif platform.system() == 'Windows':
-    import win32gui
-    import win32process
-    import psutil
 
 
 # ============ CUSTOMIZATION SETTINGS ============
@@ -99,7 +104,18 @@ WINDOW_SIZE = "320x120"
 
 # Background: Use color OR image (image takes priority if found)
 BG_COLOR = "#FFFFFF"  # Background color (used when no image)
-BG_IMAGE_PATH = "assets/bg/background.png"  # Optional background image
+# Helper to find resources in both dev and PyInstaller bundled mode
+def resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    try:
+        import sys
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_path, relative_path)
+
+BG_IMAGE_PATH = resource_path(os.path.join("assets", "bg", "background.png"))  # Optional background image
 
 # Button colors
 BUTTON_PAUSE_BG = "#9C2D2D"    # Pause button (red-ish)
@@ -146,7 +162,7 @@ class ActivityTracker:
         if not os.path.exists(self.data_folder):
             os.makedirs(self.data_folder)
         
-        log.info(f"ActivityTracker initialized — data folder: {self.data_folder}")
+        log.info(f"ActivityTracker initialized â€” data folder: {self.data_folder}")
         log.info(f"  Autosave interval: {autosave_interval}s")
         
         # Current session data
@@ -218,7 +234,7 @@ class ActivityTracker:
             log.info(f"Auto-saved: {len(self.session_events)} events | File: {self.session_file}")
     
     def on_key_press(self, key):
-        """Callback for keyboard events — categorizes keystrokes for privacy"""
+        """Callback for keyboard events â€” categorizes keystrokes for privacy"""
         try:
             # Determine the raw key name
             if hasattr(key, 'char') and key.char is not None:
@@ -352,7 +368,7 @@ class ActivitySummary:
     def __init__(self, data_folder='activity_data'):
         self.data_folder = data_folder
         self.break_threshold = 300  # 5 minutes in seconds
-        self.session_timeout = 3600  # 1 hour — gaps longer than this = session ended
+        self.session_timeout = 3600  # 1 hour â€” gaps longer than this = session ended
     
     def load_all_events(self):
         """Load all events from CSV files"""
@@ -461,7 +477,7 @@ class ActivitySummary:
                 time_gap = (timestamp - last_timestamp).total_seconds()
                 
                 if time_gap > self.session_timeout:
-                    # SESSION ENDED — exclude from stats
+                    # SESSION ENDED â€” exclude from stats
                     current_period['end'] = last_timestamp
                     periods.append(current_period)
                     periods.append({
@@ -722,20 +738,18 @@ class ActivitySummary:
         
         # Generate filename with timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        report_file = os.path.join(reports_folder, f'summary_{timestamp}.txt')
+        report_file = os.path.join(reports_folder, f'summary_{timestamp}.md')
         csv_file = os.path.join(reports_folder, f'summary_{timestamp}.csv')
         
         # Build report content
         lines = []
-        lines.append("=" * 60)
-        lines.append("ACTIVITY TRACKER SUMMARY")
-        lines.append("=" * 60)
+        lines.append("# ACTIVITY TRACKER SUMMARY")
+        lines.append("")
         
         # Load all events
         all_events = self.load_all_events()
         if not all_events:
-            lines.append("\nNo data found!")
-            # Save and return
+            lines.append("No data found!")
             with open(report_file, 'w', encoding='utf-8') as f:
                 f.write('\n'.join(lines))
             return report_file, None
@@ -751,42 +765,43 @@ class ActivitySummary:
         today_stats = None
         today_periods = []
         if today_events:
-            lines.append("\n📅 TODAY'S SUMMARY")
-            lines.append("-" * 60)
+            lines.append("## TODAY'S SUMMARY")
+            lines.append("")
             today_stats = self.analyze_events(today_events, "Today")
             lines.extend(self.format_stats(today_stats))
             
             # Generate timeline - use RAW periods before filtering
-            # This shows all gaps including ones at end of sessions
             raw_periods = self.detect_periods_raw(today_events)
             lines.extend(self.generate_timeline(raw_periods, "Today"))
             
             # Today's program table
-            lines.append("\n📋 TODAY - PROGRAM USAGE TABLE")
-            lines.append("-" * 60)
+            lines.append("### Today - Program Usage")
+            lines.append("")
             lines.extend(self.format_program_table(today_stats['program_stats']))
         else:
-            lines.append("\n📅 TODAY'S SUMMARY")
-            lines.append("-" * 60)
+            lines.append("## TODAY'S SUMMARY")
+            lines.append("")
             lines.append("No activity recorded today.")
+            lines.append("")
         
         # Analyze lifetime
-        lines.append("\n\n" + "=" * 60)
-        lines.append("📊 LIFETIME SUMMARY")
-        lines.append("=" * 60)
+        lines.append("---")
+        lines.append("")
+        lines.append("## LIFETIME SUMMARY")
+        lines.append("")
         lifetime_stats = self.analyze_events(all_events, "Lifetime")
         lines.extend(self.format_stats(lifetime_stats))
         
         # Lifetime program table
-        lines.append("\n📋 LIFETIME - PROGRAM USAGE TABLE")
-        lines.append("-" * 60)
+        lines.append("### Lifetime - Program Usage")
+        lines.append("")
         lines.extend(self.format_program_table(lifetime_stats['program_stats']))
         
-        lines.append("\n" + "=" * 60)
-        lines.append(f"Report generated at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        lines.append("=" * 60)
+        lines.append("---")
+        lines.append("")
+        lines.append(f"*Report generated at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*")
         
-        # Save text report
+        # Save markdown report
         with open(report_file, 'w', encoding='utf-8') as f:
             f.write('\n'.join(lines))
         
@@ -796,13 +811,14 @@ class ActivitySummary:
         return report_file, csv_file
     
     def generate_timeline(self, periods, date_label="Today"):
-        """Generate hourly timeline of work vs break periods"""
+        """Generate hourly timeline of work vs break periods (markdown code block)"""
         if not periods:
             return []
         
         lines = []
-        lines.append(f"\n🕐 {date_label.upper()} - HOURLY TIMELINE")
-        lines.append("-" * 60)
+        lines.append(f"### {date_label} - Hourly Timeline")
+        lines.append("")
+        lines.append("```")
         
         all_times = []
         for period in periods:
@@ -813,10 +829,12 @@ class ActivitySummary:
         
         if not all_times:
             lines.append("No activity data")
+            lines.append("```")
+            lines.append("")
             return lines
         
         session_start = min(all_times)
-        lines.append(f"{session_start.strftime('%I:%M %p').lstrip('0'):<15} | Session Started")
+        lines.append(f"{session_start.strftime('%I:%M %p').lstrip('0'):<15} -- Session Started")
         
         for i, period in enumerate(periods):
             if not period['start'] or not period['end']:
@@ -827,20 +845,24 @@ class ActivitySummary:
             duration = (period['end'] - period['start']).total_seconds() / 60
             
             if period['type'] == 'session_end':
-                lines.append(f"{start_time:<15} | Session Ended")
-                lines.append(f"{'':15} |")
-                lines.append(f"{end_time:<15} | Session Started")
+                lines.append(f"{start_time:<15} -- Session Ended")
+                lines.append(f"{'':15}")
+                lines.append(f"{end_time:<15} -- Session Started")
             elif period['type'] == 'work':
-                lines.append(f"{start_time:<15} | Working ({int(duration)} min)")
+                lines.append(f"{start_time:<15} -- Working ({int(duration)} min)")
             elif period['type'] == 'break':
                 if duration >= 30:
-                    lines.append(f"{start_time:<15} | Stepped Away ({int(duration)} min)")
+                    lines.append(f"{start_time:<15} -- Stepped Away ({int(duration)} min)")
                 else:
-                    lines.append(f"{start_time:<15} | Break ({int(duration)} min)")
+                    lines.append(f"{start_time:<15} -- Break ({int(duration)} min)")
         
         session_end = max(all_times)
-        lines.append(f"{session_end.strftime('%I:%M %p').lstrip('0'):<15} | Session Ended")
+        lines.append(f"{session_end.strftime('%I:%M %p').lstrip('0'):<15} -- Session Ended")
+        lines.append("```")
+        lines.append("")
         
+        return lines
+    
         return lines
     
     def save_csv_report(self, csv_file, today_stats, lifetime_stats):
@@ -946,43 +968,71 @@ class ActivitySummary:
             writer.writerows(rows)
     
     def format_stats(self, stats):
-        """Format statistics as list of strings"""
+        """Format statistics as markdown tables"""
         if not stats:
             return []
         
         lines = []
         
-        # Session duration info at top
-        lines.append(f"\n📅 Session Duration: {self.format_time(stats['total_duration_seconds'])}")
-        lines.append(f"  └─ Started: {stats['first_event'].strftime('%I:%M %p').lstrip('0')}")
-        lines.append(f"  └─ Ended: {stats['last_event'].strftime('%I:%M %p').lstrip('0')}")
+        # Session duration
+        lines.append("**Session Duration**")
+        lines.append("")
+        lines.append("| Metric | Value |")
+        lines.append("|--------|-------|")
+        lines.append(f"| Duration | {self.format_time(stats['total_duration_seconds'])} |")
+        lines.append(f"| Started | {stats['first_event'].strftime('%I:%M %p').lstrip('0')} |")
+        lines.append(f"| Ended | {stats['last_event'].strftime('%I:%M %p').lstrip('0')} |")
+        lines.append("")
         
-        lines.append(f"\n📊 Total Events: {stats['total_events']:,}")
-        lines.append(f"  └─ Mouse: {stats['mouse_events']:,}")
-        lines.append(f"  └─ Keyboard: {stats['keyboard_events']:,}")
-        lines.append(f"\n⚡ Words per Minute: {stats['wpm']:.1f}")
-        lines.append(f"⚡ Clicks per Minute: {stats['cpm']:.1f}")
+        # Events
+        lines.append("**Activity**")
+        lines.append("")
+        lines.append("| Metric | Value |")
+        lines.append("|--------|-------|")
+        lines.append(f"| Total Events | {stats['total_events']:,} |")
+        lines.append(f"| Mouse Events | {stats['mouse_events']:,} |")
+        lines.append(f"| Keyboard Events | {stats['keyboard_events']:,} |")
+        lines.append(f"| Words per Minute | {stats['wpm']:.1f} |")
+        lines.append(f"| Clicks per Minute | {stats['cpm']:.1f} |")
+        lines.append("")
         
-        lines.append(f"\n⏱️  Time Working: {self.format_time(stats['work_time_seconds'])}")
-        lines.append(f"  └─ Working Periods: {stats['work_periods']}")
-        lines.append(f"  └─ Avg Period Length: {self.format_time(stats['avg_period_length'])}")
-        lines.append(f"  └─ Avg Period Events: {stats['avg_period_events']:.0f}")
+        # Work time
+        lines.append("**Time Working**")
+        lines.append("")
+        lines.append("| Metric | Value |")
+        lines.append("|--------|-------|")
+        lines.append(f"| Time Working | {self.format_time(stats['work_time_seconds'])} |")
+        lines.append(f"| Working Periods | {stats['work_periods']} |")
+        lines.append(f"| Avg Period Length | {self.format_time(stats['avg_period_length'])} |")
+        lines.append(f"| Avg Period Events | {stats['avg_period_events']:.0f} |")
+        lines.append("")
         
-        lines.append(f"\n☕ Time on Break: {self.format_time(stats['break_time_seconds'])}")
-        lines.append(f"  └─ Number of Breaks: {stats['num_breaks']}")
+        # Break time
+        lines.append("**Time on Break**")
+        lines.append("")
+        lines.append("| Metric | Value |")
+        lines.append("|--------|-------|")
+        lines.append(f"| Total Break Time | {self.format_time(stats['break_time_seconds'])} |")
+        lines.append(f"| Number of Breaks | {stats['num_breaks']} |")
         if stats['num_breaks'] > 0:
-            lines.append(f"  └─ Avg Break Length: {self.format_time(stats['avg_break_length'])}")
+            lines.append(f"| Avg Break Length | {self.format_time(stats['avg_break_length'])} |")
+        lines.append("")
         
-        # Add stepped away section
+        # Stepped away
         if stats['num_stepped_away'] > 0:
-            lines.append(f"\n🚶 Time Stepped Away: {self.format_time(stats['stepped_away_time_seconds'])}")
-            lines.append(f"  └─ Times Stepped Away: {stats['num_stepped_away']}")
-            lines.append(f"  └─ Avg Duration: {self.format_time(stats['avg_stepped_away_length'])}")
+            lines.append("**Time Stepped Away**")
+            lines.append("")
+            lines.append("| Metric | Value |")
+            lines.append("|--------|-------|")
+            lines.append(f"| Time Stepped Away | {self.format_time(stats['stepped_away_time_seconds'])} |")
+            lines.append(f"| Times Stepped Away | {stats['num_stepped_away']} |")
+            lines.append(f"| Avg Duration | {self.format_time(stats['avg_stepped_away_length'])} |")
+            lines.append("")
         
         return lines
     
     def format_program_table(self, program_stats):
-        """Format program comparison table as list of strings"""
+        """Format program comparison as markdown table"""
         if not program_stats:
             return []
         
@@ -993,22 +1043,22 @@ class ActivitySummary:
                                 key=lambda x: x[1]['total'], 
                                 reverse=True)
         
-        # Print header
-        lines.append(f"\n{'Program':<30} {'Time':>10} {'Clicks':>10} {'Keys':>10} {'Total':>10}")
-        lines.append("-" * 73)
+        # Markdown table header
+        lines.append("| Program | Time | Clicks | Keys | Total |")
+        lines.append("|---------|------|--------|------|-------|")
         
-        # Print rows
+        # Rows
         for program, stats in sorted_programs:
             time_str = self.format_time(stats['time_seconds'])
-            lines.append(f"{program:<30} {time_str:>10} {stats['clicks']:>10,} {stats['keystrokes']:>10,} {stats['total']:>10,}")
+            lines.append(f"| {program} | {time_str} | {stats['clicks']:,} | {stats['keystrokes']:,} | {stats['total']:,} |")
         
-        # Print totals
+        # Totals
         total_time = sum([s['time_seconds'] for s in program_stats.values()])
         total_clicks = sum([s['clicks'] for s in program_stats.values()])
         total_keystrokes = sum([s['keystrokes'] for s in program_stats.values()])
         total_events = sum([s['total'] for s in program_stats.values()])
-        lines.append("-" * 73)
-        lines.append(f"{'TOTAL':<30} {self.format_time(total_time):>10} {total_clicks:>10,} {total_keystrokes:>10,} {total_events:>10,}")
+        lines.append(f"| **TOTAL** | **{self.format_time(total_time)}** | **{total_clicks:,}** | **{total_keystrokes:,}** | **{total_events:,}** |")
+        lines.append("")
         
         return lines
 
@@ -1089,7 +1139,7 @@ class ActivityTrackerGUI:
                                              fg=STATUS_TRACKING_COLOR, bg='#000000')
                 self.canvas.create_window(width//2, 20, window=self.status_label)
                 
-                # Create buttons — 3 buttons: PAUSE, SUMMARY, FOLDER
+                # Create buttons â€” 3 buttons: PAUSE, SUMMARY, FOLDER
                 button_y = height//2
                 button_spacing = 80
                 start_x = width//2 - button_spacing
@@ -1206,7 +1256,7 @@ class ActivityTrackerGUI:
             if platform.system() == 'Darwin':  # macOS
                 subprocess.run(['open', report_file])
             elif platform.system() == 'Windows':
-                subprocess.run(['start', report_file], shell=True)
+                os.startfile(report_file)
             else:  # Linux
                 subprocess.run(['xdg-open', report_file])
             log.info("Report opened successfully")

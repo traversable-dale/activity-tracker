@@ -7,3 +7,8 @@ activity_data
 activity_data/*
 TD
 TD/
+dist/
+Output/
+build/
+td_out/*
+td_out/
