@@ -4,7 +4,7 @@ Build, install, and customize Activity Tracker for Windows.
 
 ---
 
-![ref app](ref/ref-windows.png)
+![ref app](ref-windows.png)
 
 ---
 
